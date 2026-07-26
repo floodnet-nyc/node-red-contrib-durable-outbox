@@ -10,8 +10,14 @@ module.exports = function registerOutboxNodes(RED) {
       Number(config.circuitBreakerThreshold) || 3;
     this.circuitBreakerCooldownMs =
       Number(config.circuitBreakerCooldownMs) || 30_000;
+    const storeOptions = {
+      maxQueuedJobs: config.maxQueuedJobs,
+      maxJobBytes: config.maxJobBytes,
+      maxEnqueueBatch: config.maxEnqueueBatch,
+      maxDatabaseBytes: config.maxDatabaseBytes,
+    };
     try {
-      this.store = new OutboxStore(this.filename);
+      this.store = new OutboxStore(this.filename, storeOptions);
     } catch (error) {
       this.error(`Unable to open durable outbox: ${error.message}`);
       throw error;
@@ -76,23 +82,31 @@ module.exports = function registerOutboxNodes(RED) {
     const sink = config.sink;
     const leaseMs = Number(config.leaseMs) || 60_000;
     const maxInFlight = Number(config.maxInFlight) || 1;
+    const batchSize = Number(config.batchSize) || 10;
     const intervalMs = Math.max(0, Number(config.intervalMs) || 0);
     let timer = null;
 
     function claim(send, done) {
       try {
-        const job = configNode.store.claim({ sink, leaseMs, maxInFlight });
-        if (job) {
+        const jobs = configNode.store.claimBatch({
+          sink,
+          leaseMs,
+          maxInFlight,
+          batchSize,
+        });
+        if (jobs.length) {
           node.status({
             fill: "blue",
             shape: "dot",
-            text: `leased attempt ${job.attempts}`,
+            text: `${jobs.length} leased`,
           });
-          send({
-            _msgid: RED.util.generateId(),
-            payload: job.payload,
-            outbox: job,
-          });
+          for (const job of jobs) {
+            send({
+              _msgid: RED.util.generateId(),
+              payload: job.payload,
+              outbox: job,
+            });
+          }
         } else {
           const control = configNode.store.getSinkControl(sink);
           if (control.manuallyPaused) {
@@ -167,6 +181,7 @@ module.exports = function registerOutboxNodes(RED) {
           (retryable ? "infrastructure" : "data");
 
         const result = configNode.store.settle(id, {
+          leaseToken: msg.outbox.leaseToken,
           success,
           retryable,
           error,
@@ -177,7 +192,10 @@ module.exports = function registerOutboxNodes(RED) {
         });
         msg.outboxSettlement = result;
 
-        if (result.state === "dead") {
+        if (result.state === "stale_lease") {
+          node.status({ fill: "yellow", shape: "ring", text: "stale lease" });
+          send([msg, null]);
+        } else if (result.state === "dead") {
           node.status({ fill: "red", shape: "dot", text: "dead letter" });
           send([null, msg]);
         } else if (result.state === "delivered") {
@@ -211,7 +229,13 @@ module.exports = function registerOutboxNodes(RED) {
         const sink = msg.sink || config.sink || undefined;
         const failureClass =
           msg.failureClass || config.failureClass || undefined;
-        const limit = Number(msg.limit || config.limit) || 100;
+        const limit = Number(msg.limit ?? config.limit) || 100;
+        const requestedAge = Number(
+          msg.olderThanMs ?? config.olderThanMs ?? 86_400_000
+        );
+        const olderThanMs = Number.isFinite(requestedAge)
+          ? requestedAge
+          : 86_400_000;
         const id = msg.deadLetterId || msg.outbox?.id || msg.id;
         let result;
 
@@ -232,13 +256,11 @@ module.exports = function registerOutboxNodes(RED) {
             result = configNode.store.retryNow(sink);
             break;
           case "list-dead": {
-            let rows = configNode.store.listDeadLetters(limit);
-            if (sink) rows = rows.filter((job) => job.sink === sink);
-            if (failureClass) {
-              rows = rows.filter(
-                (job) => job.lastFailureClass === failureClass
-              );
-            }
+            const rows = configNode.store.listDeadLetters({
+              sink,
+              failureClass,
+              limit,
+            });
             result = { jobs: rows, count: rows.length };
             break;
           }
@@ -256,6 +278,25 @@ module.exports = function registerOutboxNodes(RED) {
               );
             }
             result = configNode.store.requeueDeadLetter(id);
+            break;
+          case "delete-dead":
+            result = configNode.store.deleteDeadLetters({
+              sink,
+              failureClass,
+              limit,
+            });
+            break;
+          case "purge-delivered":
+            result = configNode.store.purgeDelivered({
+              olderThanMs,
+              limit,
+            });
+            break;
+          case "maintenance":
+            result = configNode.store.maintenance({
+              checkpoint: msg.checkpoint !== false,
+              vacuum: msg.vacuum === true,
+            });
             break;
           default:
             throw new Error(`Unsupported outbox control action: ${action}`);

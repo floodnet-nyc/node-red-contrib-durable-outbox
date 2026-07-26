@@ -13,6 +13,26 @@
         value: 30000,
         required: true,
         validate: RED.validators.number()
+      },
+      maxQueuedJobs: {
+        value: 100000,
+        required: true,
+        validate: RED.validators.number()
+      },
+      maxJobBytes: {
+        value: 1048576,
+        required: true,
+        validate: RED.validators.number()
+      },
+      maxEnqueueBatch: {
+        value: 1000,
+        required: true,
+        validate: RED.validators.number()
+      },
+      maxDatabaseBytes: {
+        value: 1073741824,
+        required: true,
+        validate: RED.validators.number()
       }
     },
     label: function () {
@@ -45,7 +65,8 @@
       sink: { value: "", required: true },
       intervalMs: { value: 1000, required: true, validate: RED.validators.number() },
       leaseMs: { value: 60000, required: true, validate: RED.validators.number() },
-      maxInFlight: { value: 1, required: true, validate: RED.validators.number() }
+      maxInFlight: { value: 1, required: true, validate: RED.validators.number() },
+      batchSize: { value: 10, required: true, validate: RED.validators.number() }
     },
     inputs: 1,
     outputs: 1,
@@ -81,7 +102,8 @@
       action: { value: "status", required: true },
       sink: { value: "" },
       failureClass: { value: "" },
-      limit: { value: 100, validate: RED.validators.number() }
+      limit: { value: 100, validate: RED.validators.number() },
+      olderThanMs: { value: 86400000, validate: RED.validators.number() }
     },
     inputs: 1,
     outputs: 1,
@@ -108,6 +130,22 @@
   <div class="form-row">
     <label for="node-config-input-circuitBreakerCooldownMs">Cooldown (ms)</label>
     <input type="number" id="node-config-input-circuitBreakerCooldownMs">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-maxQueuedJobs">Maximum queued jobs</label>
+    <input type="number" id="node-config-input-maxQueuedJobs">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-maxJobBytes">Maximum job bytes</label>
+    <input type="number" id="node-config-input-maxJobBytes">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-maxEnqueueBatch">Maximum enqueue batch</label>
+    <input type="number" id="node-config-input-maxEnqueueBatch">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-maxDatabaseBytes">DB warning bytes</label>
+    <input type="number" id="node-config-input-maxDatabaseBytes">
   </div>
 </script>
 
@@ -151,6 +189,10 @@
     <label for="node-input-maxInFlight">Max in flight</label>
     <input type="number" id="node-input-maxInFlight">
   </div>
+  <div class="form-row">
+    <label for="node-input-batchSize">Claim batch</label>
+    <input type="number" id="node-input-batchSize">
+  </div>
 </script>
 
 <script type="text/html" data-template-name="outbox-settle">
@@ -192,6 +234,9 @@
       <option value="list-dead">List dead letters</option>
       <option value="requeue-dead">Requeue matching dead letters</option>
       <option value="requeue-one">Requeue one dead letter</option>
+      <option value="delete-dead">Delete matching dead letters</option>
+      <option value="purge-delivered">Purge delivered jobs</option>
+      <option value="maintenance">Database maintenance</option>
       <option value="msg">Read msg.outboxAction</option>
     </select>
   </div>
@@ -208,10 +253,19 @@
     <label for="node-input-limit">Limit</label>
     <input type="number" id="node-input-limit">
   </div>
+  <div class="form-row">
+    <label for="node-input-olderThanMs">Delivered age (ms)</label>
+    <input type="number" id="node-input-olderThanMs">
+  </div>
 </script>
 
 <script type="text/html" data-help-name="durable-outbox-config">
   <p>Owns a durable SQLite outbox database shared by the other outbox nodes.</p>
+  <p>
+    Queue depth, job size, and enqueue batch limits reject oversized writes atomically. The
+    database byte setting is a warning threshold reported by <code>status</code>; it does not
+    delete or reject jobs.
+  </p>
 </script>
 
 <script type="text/html" data-help-name="outbox-enqueue">
@@ -220,11 +274,17 @@
   <code>dedupeKey</code>, <code>maxAttempts</code>, <code>maxAgeMs</code>,
   <code>baseDelayMs</code>, <code>maxDelayMs</code>, and
   <code>retryUntilExpired</code>.</p>
+  <p>
+    Plain JSON values, <code>Date</code>, and <code>Buffer</code> values are preserved.
+    Undefined object properties are omitted and undefined array entries become null. Circular
+    references, functions, streams, and unsupported class instances are rejected atomically.
+  </p>
 </script>
 
 <script type="text/html" data-help-name="outbox-claim">
-  <p>Atomically leases the oldest ready job for a sink. It can poll automatically and can also
-  be triggered by any input message.</p>
+  <p>Atomically leases a bounded batch of the oldest ready jobs for a sink. It can poll
+  automatically and can also be triggered by any input message. The batch is limited by both
+  <code>Claim batch</code> and remaining <code>Max in flight</code> capacity.</p>
 </script>
 
 <script type="text/html" data-help-name="outbox-settle">
@@ -232,6 +292,11 @@
   dead-letter table. Set <code>msg.outboxFailureClass</code> to
   <code>infrastructure</code> to participate in circuit breaking. The second output receives
   dead-lettered jobs.</p>
+  <p>
+    Settlement is fenced by the lease token in <code>msg.outbox.leaseToken</code>. A worker
+    whose lease expired cannot settle a newer worker's claim; its result is
+    <code>stale_lease</code>.
+  </p>
 </script>
 
 <script type="text/html" data-help-name="outbox-control">
@@ -264,6 +329,19 @@
       Overrides the configured maximum number of dead letters to list or requeue. The default
       is 100.
     </dd>
+    <dt class="optional">olderThanMs <span class="property-type">number</span></dt>
+    <dd>
+      Age threshold for <code>purge-delivered</code>. The default is 86400000 (one day).
+    </dd>
+    <dt class="optional">vacuum <span class="property-type">boolean</span></dt>
+    <dd>
+      Set to true with <code>maintenance</code> to compact the database. Vacuum can block
+      ingestion and should be run during a maintenance window.
+    </dd>
+    <dt class="optional">checkpoint <span class="property-type">boolean</span></dt>
+    <dd>
+      Set to false to skip the WAL checkpoint during <code>maintenance</code>.
+    </dd>
     <dt class="optional">deadLetterId <span class="property-type">string</span></dt>
     <dd>
       Identifies the job for <code>requeue-one</code>. The node also accepts
@@ -276,7 +354,9 @@
     <dt><code>status</code></dt>
     <dd>
       Returns counts grouped by sink and state, the total dead-letter count, and circuit-breaker
-      state for each known sink. It does not require a sink.
+      state for each known sink. Health also includes queued count, oldest queued age, expired
+      leases, database/WAL bytes, and the configured database-size warning. It does not require
+      a sink.
     </dd>
 
     <dt><code>pause</code></dt>
@@ -316,6 +396,24 @@
     <dd>
       Atomically moves one reviewed dead letter back to the pending queue. It requires a job ID
       in <code>msg.deadLetterId</code>, <code>msg.outbox.id</code>, or <code>msg.id</code>.
+    </dd>
+
+    <dt><code>delete-dead</code></dt>
+    <dd>
+      Permanently deletes a bounded number of dead letters matching the optional sink and
+      failure-class filters. This cannot be undone; review with <code>list-dead</code> first.
+    </dd>
+
+    <dt><code>purge-delivered</code></dt>
+    <dd>
+      Deletes at most <code>limit</code> delivered records whose delivery time is at least
+      <code>olderThanMs</code> old. Pending and leased jobs are never affected.
+    </dd>
+
+    <dt><code>maintenance</code></dt>
+    <dd>
+      Checkpoints the SQLite WAL. Set <code>msg.vacuum = true</code> to compact the main
+      database after retention cleanup; schedule vacuum during a quiet maintenance window.
     </dd>
   </dl>
 

@@ -5,6 +5,7 @@ const { mkdtempSync, rmSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
 const { DatabaseSync } = require("node:sqlite");
 const { OutboxStore, stableStringify } = require("../lib/outbox-store");
 
@@ -16,6 +17,13 @@ function withStore(t, options = {}) {
     rmSync(directory, { recursive: true, force: true });
   });
   return store;
+}
+
+function settle(store, id, outcome) {
+  return store.settle(id, {
+    ...outcome,
+    leaseToken: store.getJob(id)?.leaseToken,
+  });
 }
 
 test("stableStringify canonicalizes object keys", () => {
@@ -63,8 +71,56 @@ test("migrates databases created by the original schema", (t) => {
     .map((column) => column.name);
   assert.equal(activeColumns.includes("retry_until_expired"), true);
   assert.equal(activeColumns.includes("last_failure_class"), true);
+  assert.equal(activeColumns.includes("payload_encoding"), true);
+  assert.equal(activeColumns.includes("lease_token"), true);
   assert.equal(deadColumns.includes("retry_until_expired"), true);
   assert.equal(deadColumns.includes("last_failure_class"), true);
+  assert.equal(deadColumns.includes("payload_encoding"), true);
+});
+
+test("serialization preserves Node-RED values and rejects unsafe payloads", (t) => {
+  const store = withStore(t);
+  const timestamp = new Date("2026-07-26T12:34:56.000Z");
+  const [queued] = store.enqueue({
+    sink: "postgres",
+    payload: {
+      timestamp,
+      bytes: Buffer.from([0, 1, 2, 255]),
+      omitted: undefined,
+      array: [1, undefined, 3],
+    },
+  });
+  const claimed = store.claim({ sink: "postgres" });
+  assert.equal(claimed.id, queued.id);
+  assert.equal(claimed.payload.timestamp instanceof Date, true);
+  assert.equal(claimed.payload.timestamp.toISOString(), timestamp.toISOString());
+  assert.deepEqual(claimed.payload.bytes, Buffer.from([0, 1, 2, 255]));
+  assert.equal("omitted" in claimed.payload, false);
+  assert.deepEqual(claimed.payload.array, [1, null, 3]);
+
+  const circular = {};
+  circular.self = circular;
+  assert.throws(
+    () => store.enqueue({ sink: "postgres", payload: circular }),
+    /Circular reference/
+  );
+  assert.throws(
+    () => store.enqueue({ sink: "postgres", payload: { work() {} } }),
+    /Unsupported function/
+  );
+
+  const functionNodePayload = vm.runInNewContext(
+    "({ device_id: 'sensor-1', value: 42 })"
+  );
+  const [crossRealm] = store.enqueue({
+    sink: "postgres",
+    dedupeKey: "cross-realm",
+    payload: functionNodePayload,
+  });
+  assert.deepEqual(store.getJob(crossRealm.id).payload, {
+    device_id: "sensor-1",
+    value: 42,
+  });
 });
 
 test("enqueue is atomic and deduplicates equivalent jobs", (t) => {
@@ -77,7 +133,11 @@ test("enqueue is atomic and deduplicates equivalent jobs", (t) => {
       ]),
     /requires a payload/
   );
-  assert.deepEqual(store.stats(), { jobs: [], deadLetters: 0, controls: [] });
+  const emptyStats = store.stats();
+  assert.deepEqual(emptyStats.jobs, []);
+  assert.equal(emptyStats.deadLetters, 0);
+  assert.deepEqual(emptyStats.controls, []);
+  assert.equal(emptyStats.health.queued, 0);
 
   const first = store.enqueue({
     sink: "postgres",
@@ -123,6 +183,65 @@ test("claim enforces concurrency and recovers expired leases", (t) => {
   assert.equal(recovered.attempts, 2);
 });
 
+test("lease tokens fence stale workers after a reclaim", (t) => {
+  let now = 12_000;
+  const store = withStore(t, { now: () => now });
+  const [queued] = store.enqueue({
+    sink: "postgres",
+    payload: { value: 7 },
+  });
+  const stale = store.claim({ sink: "postgres", leaseMs: 100 });
+  now += 101;
+  const current = store.claim({ sink: "postgres", leaseMs: 100 });
+
+  assert.notEqual(current.leaseToken, stale.leaseToken);
+  assert.deepEqual(
+    store.settle(queued.id, {
+      leaseToken: stale.leaseToken,
+      success: true,
+    }),
+    { id: queued.id, state: "stale_lease" }
+  );
+  assert.equal(store.getJob(queued.id).leaseToken, current.leaseToken);
+  assert.equal(
+    store.settle(queued.id, {
+      leaseToken: current.leaseToken,
+      success: true,
+    }).state,
+    "delivered"
+  );
+});
+
+test("batch claims fill only remaining in-flight capacity", (t) => {
+  const store = withStore(t);
+  store.enqueue(
+    Array.from({ length: 8 }, (_, index) => ({
+      sink: "postgres",
+      dedupeKey: `batch-${index}`,
+      payload: { index },
+    }))
+  );
+  const first = store.claimBatch({
+    sink: "postgres",
+    maxInFlight: 5,
+    batchSize: 3,
+  });
+  const second = store.claimBatch({
+    sink: "postgres",
+    maxInFlight: 5,
+    batchSize: 10,
+  });
+  const full = store.claimBatch({
+    sink: "postgres",
+    maxInFlight: 5,
+    batchSize: 10,
+  });
+  assert.equal(first.length, 3);
+  assert.equal(second.length, 2);
+  assert.equal(full.length, 0);
+  assert.equal(new Set([...first, ...second].map((job) => job.id)).size, 5);
+});
+
 test("repeatedly abandoned leases dead-letter at the attempt bound", (t) => {
   let now = 15_000;
   const store = withStore(t, { now: () => now });
@@ -155,7 +274,7 @@ test("retry delay is bounded exponential backoff with jitter", (t) => {
   });
 
   store.claim({ sink: "postgres" });
-  const first = store.settle(queued.id, {
+  const first = settle(store, queued.id, {
     success: false,
     retryable: true,
     error: new Error("offline"),
@@ -164,7 +283,7 @@ test("retry delay is bounded exponential backoff with jitter", (t) => {
 
   now = first.availableAt;
   store.claim({ sink: "postgres" });
-  const second = store.settle(queued.id, {
+  const second = settle(store, queued.id, {
     success: false,
     retryable: true,
     error: "still offline",
@@ -192,19 +311,19 @@ test("success is retained and retry exhaustion moves atomically to dead letter",
 
   store.claim({ sink: "postgres" });
   assert.equal(
-    store.settle(successful.id, { success: true }).state,
+    settle(store, successful.id, { success: true }).state,
     "delivered"
   );
   assert.equal(store.getJob(successful.id).state, "delivered");
 
   store.claim({ sink: "fieldkit" });
-  store.settle(doomed.id, {
+  settle(store, doomed.id, {
     success: false,
     retryable: true,
     error: "failure one",
   });
   store.claim({ sink: "fieldkit" });
-  const dead = store.settle(doomed.id, {
+  const dead = settle(store, doomed.id, {
     success: false,
     retryable: true,
     error: "failure two",
@@ -228,7 +347,7 @@ test("non-retryable errors dead-letter immediately", (t) => {
     payload: { malformed: true },
   });
   store.claim({ sink: "fieldkit" });
-  const result = store.settle(queued.id, {
+  const result = settle(store, queued.id, {
     success: false,
     retryable: false,
     error: "HTTP 400",
@@ -250,7 +369,7 @@ test("infrastructure jobs retry past attempt limit and open a circuit", (t) => {
   });
 
   store.claim({ sink: "postgres" });
-  const retry = store.settle(queued.id, {
+  const retry = settle(store, queued.id, {
     success: false,
     retryable: true,
     failureClass: "infrastructure",
@@ -266,7 +385,7 @@ test("infrastructure jobs retry past attempt limit and open a circuit", (t) => {
   assert.equal(resumed.released, 1);
   const secondAttempt = store.claim({ sink: "postgres" });
   assert.equal(secondAttempt.attempts, 2);
-  assert.equal(store.settle(queued.id, { success: true }).state, "delivered");
+  assert.equal(settle(store, queued.id, { success: true }).state, "delivered");
   assert.equal(store.getSinkControl("postgres").consecutiveFailures, 0);
 });
 
@@ -288,7 +407,7 @@ test("bulk dead-letter recovery filters by sink and failure class", (t) => {
     const claimed = store.claim({
       sink: job.dedupeKey.startsWith("postgres") ? "postgres" : "fieldkit",
     });
-    store.settle(claimed.id, {
+    settle(store, claimed.id, {
       success: false,
       retryable: false,
       failureClass: "infrastructure",
@@ -304,4 +423,102 @@ test("bulk dead-letter recovery filters by sink and failure class", (t) => {
   assert.equal(store.getJob(jobs[0].id).state, "pending");
   assert.equal(store.getJob(jobs[1].id), null);
   assert.equal(store.listDeadLetters().length, 1);
+});
+
+test("dead-letter filters are applied before the result limit", (t) => {
+  let now = 50_000;
+  const store = withStore(t, { now: () => now });
+  for (const [index, sink] of ["postgres", "fieldkit", "fieldkit"].entries()) {
+    const [job] = store.enqueue({
+      sink,
+      dedupeKey: `filtered-${index}`,
+      payload: { index },
+    });
+    const claimed = store.claim({ sink });
+    settle(store, job.id, {
+      success: false,
+      retryable: false,
+      failureClass: sink === "postgres" ? "infrastructure" : "data",
+      error: "failed",
+    });
+    now += 1;
+  }
+
+  const rows = store.listDeadLetters({
+    sink: "postgres",
+    failureClass: "infrastructure",
+    limit: 1,
+  });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].sink, "postgres");
+});
+
+test("retention, deletion, health, and capacity controls are bounded", (t) => {
+  let now = 60_000;
+  const store = withStore(t, {
+    now: () => now,
+    maxQueuedJobs: 2,
+    maxJobBytes: 256,
+    maxEnqueueBatch: 2,
+    maxDatabaseBytes: 1,
+  });
+  const jobs = store.enqueue([
+    { sink: "postgres", dedupeKey: "retained-1", payload: { value: 1 } },
+    { sink: "postgres", dedupeKey: "retained-2", payload: { value: 2 } },
+  ]);
+  assert.throws(
+    () =>
+      store.enqueue({
+        sink: "postgres",
+        dedupeKey: "over-capacity",
+        payload: { value: 3 },
+      }),
+    /queue exceeds/
+  );
+
+  const first = store.claim({ sink: "postgres", maxInFlight: 2 });
+  settle(store, first.id, { success: true });
+  now += 100;
+  const second = store.claim({ sink: "postgres", maxInFlight: 2 });
+  settle(store, second.id, {
+    success: false,
+    retryable: false,
+    failureClass: "data",
+    error: "bad row",
+  });
+
+  const health = store.stats().health;
+  assert.equal(health.queued, 0);
+  assert.equal(health.databaseSizeWarning, true);
+  assert.equal(
+    store.purgeDelivered({ olderThanMs: 50, limit: 1 }).purged,
+    1
+  );
+  assert.equal(
+    store.deleteDeadLetters({
+      sink: "postgres",
+      failureClass: "data",
+      limit: 1,
+    }).deleted,
+    1
+  );
+  assert.equal(store.getJob(jobs[0].id), null);
+  assert.equal(store.listDeadLetters().length, 0);
+  assert.throws(
+    () =>
+      store.enqueue({
+        sink: "postgres",
+        payload: { text: "x".repeat(1_000) },
+      }),
+    /payload exceeds/
+  );
+  assert.throws(
+    () =>
+      store.enqueue([
+        { sink: "postgres", payload: 1 },
+        { sink: "postgres", payload: 2 },
+        { sink: "postgres", payload: 3 },
+      ]),
+    /batch exceeds/
+  );
 });

@@ -183,3 +183,63 @@ test("settle sends non-retryable failures to its dead-letter output", async () =
   await harness.close(claim);
   await harness.close(config);
 });
+
+test("claim emits a bounded batch and control exposes lifecycle actions", async () => {
+  const harness = createHarness();
+  const config = harness.instantiate("durable-outbox-config", {
+    id: "outbox",
+    filename: ":memory:",
+  });
+  const enqueue = harness.instantiate("outbox-enqueue", {
+    outbox: "outbox",
+    jobProperty: "jobs",
+  });
+  const claim = harness.instantiate("outbox-claim", {
+    outbox: "outbox",
+    sink: "postgres",
+    intervalMs: 0,
+    leaseMs: 60_000,
+    maxInFlight: 3,
+    batchSize: 2,
+  });
+  const settle = harness.instantiate("outbox-settle", {
+    outbox: "outbox",
+    outcome: "success",
+  });
+  const control = harness.instantiate("outbox-control", {
+    outbox: "outbox",
+    action: "msg",
+  });
+
+  await harness.input(enqueue, {
+    jobs: [1, 2, 3].map((value) => ({
+      sink: "postgres",
+      dedupeKey: `node-batch-${value}`,
+      payload: { value },
+    })),
+  });
+  await harness.input(claim);
+  assert.equal(claim.sent.length, 2);
+  assert.equal(
+    claim.sent.every((message) => typeof message.outbox.leaseToken === "string"),
+    true
+  );
+  await harness.input(settle, claim.sent[0]);
+  await harness.input(control, {
+    outboxAction: "purge-delivered",
+    olderThanMs: 0,
+    limit: 1,
+  });
+  assert.equal(control.sent[0].payload.purged, 1);
+
+  await harness.input(control, { outboxAction: "status" });
+  assert.equal(typeof control.sent[1].payload.health.databaseBytes, "number");
+  await harness.input(control, {
+    outboxAction: "maintenance",
+    checkpoint: false,
+  });
+  assert.equal(control.sent[2].payload.checkpoint, null);
+
+  await harness.close(claim);
+  await harness.close(config);
+});

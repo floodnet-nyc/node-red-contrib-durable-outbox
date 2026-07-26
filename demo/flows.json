@@ -156,7 +156,8 @@
     "sink": "postgres-demo",
     "intervalMs": 500,
     "leaseMs": 15000,
-    "maxInFlight": 1,
+    "maxInFlight": 5,
+    "batchSize": 5,
     "x": 420,
     "y": 240,
     "wires": [
@@ -169,7 +170,7 @@
     "id": "prepare-postgres-query",
     "type": "function",
     "z": "demo-flow",
-    "name": "Prepare parameterized upsert",
+    "name": "query",
     "func": "const reading = msg.payload;\nmsg.query = `\n    INSERT INTO sensor_readings (device_id, observed_at, value_mm)\n    VALUES ($1, $2, $3)\n    ON CONFLICT (device_id, observed_at)\n    DO UPDATE SET value_mm = EXCLUDED.value_mm\n    RETURNING *\n`;\nmsg.params = [\n    reading.device_id,\n    reading.observed_at,\n    reading.value_mm\n];\nreturn msg;",
     "outputs": 1,
     "timeout": 0,

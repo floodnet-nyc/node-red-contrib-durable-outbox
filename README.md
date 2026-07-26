@@ -14,6 +14,10 @@ The module requires Node.js 22 or newer because it uses the built-in
 Owns one SQLite database and applies its schema and durability settings. Use a
 path on persistent local storage, such as `/data/outbox/outbox.sqlite`.
 
+The config node also bounds queue depth, encoded job size, and enqueue batch
+size. Its database-size threshold is reported as a health warning; it does not
+silently discard or reject already queued work.
+
 ### `outbox-enqueue`
 
 Reads one job or an array of jobs from `msg.outboxJobs` by default and commits
@@ -37,7 +41,10 @@ return msg;
 
 `dedupeKey` is optional. If omitted, the node hashes the sink and canonical
 payload. A duplicate enqueue returns the existing job instead of creating
-another one.
+another one. JSON values, `Date`, and `Buffer` instances are preserved using a
+versioned encoding. Unsafe values such as circular references, functions,
+streams, and arbitrary class instances are rejected before the transaction
+commits.
 
 With `retryUntilExpired: true`, retryable infrastructure failures ignore the
 attempt count and remain active until `maxAgeMs`. Backoff is still bounded by
@@ -46,8 +53,9 @@ deliveries.
 
 ### `outbox-claim`
 
-Leases the oldest ready job for one sink. Configure an automatic polling
-interval, lease duration, and maximum concurrent leases. Any input message
+Leases a bounded batch of the oldest ready jobs for one sink. Configure an
+automatic polling interval, lease duration, claim batch, and maximum concurrent
+leases. A poll fills only the remaining in-flight capacity. Any input message
 also triggers a poll.
 
 The output has this shape:
@@ -59,12 +67,15 @@ The output has this shape:
         id: "...",
         sink: "postgres",
         attempts: 1,
-        leaseUntil: 1725038578295
+        leaseUntil: 1725038578295,
+        leaseToken: "..."
     }
 }
 ```
 
-An expired lease is eligible for recovery by another poll.
+An expired lease is eligible for recovery by another poll. Each new claim gets
+a fresh lease token. Settlement requires that token, so a slow worker cannot
+settle a job after another worker has reclaimed it.
 
 After the configured number of consecutive infrastructure failures, claims
 for that sink pause for the circuit-breaker cooldown. The next claim after the
@@ -84,7 +95,9 @@ msg.outboxStatus = 503;
 ```
 
 The first output receives delivered jobs and scheduled retries. The second
-output receives jobs moved to the dead-letter table.
+output receives jobs moved to the dead-letter table. A stale settlement is
+returned with `msg.outboxSettlement.state === "stale_lease"` and does not
+change the job or circuit state.
 
 ### `outbox-control`
 
@@ -97,10 +110,17 @@ msg.sink = "postgres";
 return msg;
 ```
 
-Supported actions are `status`, `pause`, `resume`, `retry-now`, `list-dead`,
-`requeue-dead`, and `requeue-one`. `resume` closes the sink circuit and makes
-all pending work immediately eligible. Results are returned in both
-`msg.payload` and `msg.outboxControl.result`.
+Supported actions are:
+
+- `status`, `pause`, `resume`, and `retry-now`;
+- `list-dead`, `requeue-dead`, and `requeue-one`;
+- `delete-dead` for reviewed, bounded dead-letter deletion;
+- `purge-delivered` for bounded retention cleanup;
+- `maintenance` for WAL checkpointing and an explicitly requested vacuum.
+
+`resume` closes the sink circuit and makes all pending work immediately
+eligible. Results are returned in both `msg.payload` and
+`msg.outboxControl.result`.
 
 ## Tests
 
@@ -114,8 +134,11 @@ The tests cover:
 
 - atomic rollback for multi-job enqueue;
 - canonical deduplication;
+- `Date`/`Buffer` serialization and unsafe-payload rejection;
 - maximum in-flight enforcement;
+- bounded batch claiming;
 - expired lease recovery;
+- stale-worker lease fencing;
 - bounded exponential backoff with jitter;
 - successful delivery retention;
 - retry exhaustion and non-retryable dead letters;
@@ -123,6 +146,8 @@ The tests cover:
 - retry-until-expired infrastructure policy;
 - per-sink circuit breaking and manual resume;
 - filtered bulk dead-letter replay;
+- SQL-filtered dead-letter listing;
+- bounded retention, deletion, health, and capacity controls;
 - registration and message behavior of all five Node-RED nodes.
 
 ## Docker Compose PostgreSQL demo
@@ -196,6 +221,24 @@ msg.deadLetterId = "the-job-id";
 return msg;
 ```
 
+To purge at most 1,000 delivered records older than one day:
+
+```js
+msg.outboxAction = "purge-delivered";
+msg.olderThanMs = 24 * 60 * 60 * 1000;
+msg.limit = 1000;
+return msg;
+```
+
+After cleanup, checkpoint the WAL. Vacuum is opt-in because it can block
+ingestion:
+
+```js
+msg.outboxAction = "maintenance";
+msg.vacuum = false;
+return msg;
+```
+
 There are no built-in HTTP management endpoints. Authentication, authorization,
 auditing, and operator presentation remain part of the surrounding Node-RED
 flow.
@@ -204,10 +247,11 @@ flow.
 
 - Mount the SQLite directory on persistent local storage. Do not place the WAL
   database on NFS.
-- Monitor pending count, oldest pending age, dead-letter count, and disk usage.
+- Monitor `status` health fields for queue depth, oldest queued age, expired
+  leases, dead-letter count, and database/WAL size.
 - A worker lease should exceed the sink's connection and request timeout.
-- Retained delivered records need a periodic retention policy in a production
-  deployment.
+- Trigger `purge-delivered` periodically in bounded batches. Run an optional
+  maintenance vacuum only during a quiet window.
 - The outbox gives PostgreSQL effectively-once behavior because the demo uses
   an idempotent upsert. External HTTP sinks still need an idempotency key to
   avoid duplicates after an ambiguous timeout.

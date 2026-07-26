@@ -1,0 +1,298 @@
+[
+  {
+    "id": "demo-flow",
+    "type": "tab",
+    "label": "Durable PostgreSQL outbox demo",
+    "disabled": false,
+    "info": "Generated readings are committed to SQLite before a worker attempts PostgreSQL delivery."
+  },
+  {
+    "id": "outbox-config",
+    "type": "durable-outbox-config",
+    "name": "Demo outbox",
+    "filename": "/data/outbox/outbox.sqlite"
+  },
+  {
+    "id": "generate-reading",
+    "type": "inject",
+    "z": "demo-flow",
+    "name": "Generate reading every 2s",
+    "props": [],
+    "repeat": "2",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "1",
+    "topic": "",
+    "x": 160,
+    "y": 100,
+    "wires": [
+      [
+        "build-outbox-job"
+      ]
+    ]
+  },
+  {
+    "id": "build-outbox-job",
+    "type": "function",
+    "z": "demo-flow",
+    "name": "Build durable PostgreSQL job",
+    "func": "const observedAt = new Date();\nconst sequence = context.get('sequence') || 0;\ncontext.set('sequence', sequence + 1);\nconst reading = {\n    device_id: 'demo-sensor-1',\n    observed_at: observedAt.toISOString(),\n    value_mm: 100 + (sequence % 50)\n};\nmsg.outboxJobs = {\n    sink: 'postgres-demo',\n    dedupeKey: `reading:${reading.device_id}:${reading.observed_at}`,\n    payload: reading,\n    maxAttempts: 8,\n    maxAgeMs: 3600000,\n    baseDelayMs: 1000,\n    maxDelayMs: 30000\n};\nmsg.payload = reading;\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 420,
+    "y": 100,
+    "wires": [
+      [
+        "enqueue-postgres",
+        "generated-debug"
+      ]
+    ]
+  },
+  {
+    "id": "enqueue-postgres",
+    "type": "outbox-enqueue",
+    "z": "demo-flow",
+    "name": "Commit to local outbox",
+    "outbox": "outbox-config",
+    "jobProperty": "outboxJobs",
+    "x": 700,
+    "y": 100,
+    "wires": [
+      [
+        "queued-debug"
+      ]
+    ]
+  },
+  {
+    "id": "generated-debug",
+    "type": "debug",
+    "z": "demo-flow",
+    "name": "Generated",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 690,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "queued-debug",
+    "type": "debug",
+    "z": "demo-flow",
+    "name": "Durably queued",
+    "active": false,
+    "tosidebar": false,
+    "console": false,
+    "tostatus": true,
+    "complete": "outboxEnqueue",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 930,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "manual-claim",
+    "type": "inject",
+    "z": "demo-flow",
+    "name": "Manual worker poll",
+    "props": [],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 150,
+    "y": 240,
+    "wires": [
+      [
+        "claim-postgres"
+      ]
+    ]
+  },
+  {
+    "id": "claim-postgres",
+    "type": "outbox-claim",
+    "z": "demo-flow",
+    "name": "Lease PostgreSQL work",
+    "outbox": "outbox-config",
+    "sink": "postgres-demo",
+    "intervalMs": 500,
+    "leaseMs": 15000,
+    "maxInFlight": 1,
+    "x": 420,
+    "y": 240,
+    "wires": [
+      [
+        "postgres-upsert"
+      ]
+    ]
+  },
+  {
+    "id": "postgres-upsert",
+    "type": "function",
+    "z": "demo-flow",
+    "name": "PostgreSQL upsert",
+    "func": "const client = new pg.Client({\n    host: env.get('POSTGRES_HOST'),\n    port: Number(env.get('POSTGRES_PORT') || 5432),\n    database: env.get('POSTGRES_DB'),\n    user: env.get('POSTGRES_USER'),\n    password: env.get('POSTGRES_PASSWORD'),\n    connectionTimeoutMillis: 2000\n});\nconst reading = msg.payload;\ntry {\n    await client.connect();\n    const result = await client.query(\n        `INSERT INTO sensor_readings (device_id, observed_at, value_mm)\n         VALUES ($1, $2, $3)\n         ON CONFLICT (device_id, observed_at)\n         DO UPDATE SET value_mm = EXCLUDED.value_mm\n         RETURNING *`,\n        [reading.device_id, reading.observed_at, reading.value_mm]\n    );\n    msg.payload = result.rows[0];\n    return msg;\n} finally {\n    await client.end().catch(() => {});\n}",
+    "outputs": 1,
+    "timeout": 5,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [
+      {
+        "var": "pg",
+        "module": "pg"
+      }
+    ],
+    "x": 690,
+    "y": 240,
+    "wires": [
+      [
+        "settle-success"
+      ]
+    ]
+  },
+  {
+    "id": "settle-success",
+    "type": "outbox-settle",
+    "z": "demo-flow",
+    "name": "Acknowledge delivery",
+    "outbox": "outbox-config",
+    "outcome": "success",
+    "x": 930,
+    "y": 240,
+    "wires": [
+      [
+        "delivered-debug"
+      ],
+      []
+    ]
+  },
+  {
+    "id": "postgres-catch",
+    "type": "catch",
+    "z": "demo-flow",
+    "name": "PostgreSQL failure",
+    "scope": [
+      "postgres-upsert"
+    ],
+    "uncaught": false,
+    "x": 420,
+    "y": 340,
+    "wires": [
+      [
+        "classify-postgres"
+      ]
+    ]
+  },
+  {
+    "id": "classify-postgres",
+    "type": "function",
+    "z": "demo-flow",
+    "name": "Classify PostgreSQL failure",
+    "func": "const nonRetryable = new Set([\n    '22001', '22003', '22P02',\n    '23502', '23503', '23505', '23514',\n    '42601', '42703', '42P01'\n]);\nconst code = msg.error?.code;\nmsg.outboxOutcome = 'failure';\nmsg.outboxRetryable = !nonRetryable.has(code);\nmsg.outboxError = msg.error || `PostgreSQL delivery failed (${code || 'unknown'})`;\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 700,
+    "y": 340,
+    "wires": [
+      [
+        "settle-failure"
+      ]
+    ]
+  },
+  {
+    "id": "settle-failure",
+    "type": "outbox-settle",
+    "z": "demo-flow",
+    "name": "Retry or dead-letter",
+    "outbox": "outbox-config",
+    "outcome": "msg",
+    "x": 950,
+    "y": 340,
+    "wires": [
+      [
+        "retry-debug"
+      ],
+      [
+        "dead-debug"
+      ]
+    ]
+  },
+  {
+    "id": "delivered-debug",
+    "type": "debug",
+    "z": "demo-flow",
+    "name": "PostgreSQL delivered",
+    "active": false,
+    "tosidebar": false,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1190,
+    "y": 240,
+    "wires": []
+  },
+  {
+    "id": "retry-debug",
+    "type": "debug",
+    "z": "demo-flow",
+    "name": "Retry scheduled",
+    "active": false,
+    "tosidebar": false,
+    "console": false,
+    "tostatus": true,
+    "complete": "outboxSettlement",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1180,
+    "y": 320,
+    "wires": []
+  },
+  {
+    "id": "dead-debug",
+    "type": "debug",
+    "z": "demo-flow",
+    "name": "Dead letter",
+    "active": true,
+    "tosidebar": true,
+    "console": true,
+    "tostatus": false,
+    "complete": "outboxSettlement",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1170,
+    "y": 380,
+    "wires": []
+  },
+  {
+    "id": "flow-comment",
+    "type": "comment",
+    "z": "demo-flow",
+    "name": "Stop PostgreSQL: docker compose stop postgres. Jobs remain in SQLite and drain after restart.",
+    "info": "",
+    "x": 450,
+    "y": 440,
+    "wires": []
+  }
+]

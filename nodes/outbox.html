@@ -1,0 +1,158 @@
+<script type="text/javascript">
+  RED.nodes.registerType("durable-outbox-config", {
+    category: "config",
+    defaults: {
+      name: { value: "" },
+      filename: { value: "/data/outbox/outbox.sqlite", required: true }
+    },
+    label: function () {
+      return this.name || this.filename || "durable outbox";
+    }
+  });
+
+  RED.nodes.registerType("outbox-enqueue", {
+    category: "storage",
+    color: "#C7E9C0",
+    defaults: {
+      name: { value: "" },
+      outbox: { value: "", type: "durable-outbox-config", required: true },
+      jobProperty: { value: "outboxJobs", required: true }
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "font-awesome/fa-save",
+    label: function () {
+      return this.name || "outbox enqueue";
+    }
+  });
+
+  RED.nodes.registerType("outbox-claim", {
+    category: "storage",
+    color: "#C7E9C0",
+    defaults: {
+      name: { value: "" },
+      outbox: { value: "", type: "durable-outbox-config", required: true },
+      sink: { value: "", required: true },
+      intervalMs: { value: 1000, required: true, validate: RED.validators.number() },
+      leaseMs: { value: 60000, required: true, validate: RED.validators.number() },
+      maxInFlight: { value: 1, required: true, validate: RED.validators.number() }
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "font-awesome/fa-inbox",
+    label: function () {
+      return this.name || `claim ${this.sink || "outbox"}`;
+    }
+  });
+
+  RED.nodes.registerType("outbox-settle", {
+    category: "storage",
+    color: "#C7E9C0",
+    defaults: {
+      name: { value: "" },
+      outbox: { value: "", type: "durable-outbox-config", required: true },
+      outcome: { value: "success", required: true }
+    },
+    inputs: 1,
+    outputs: 2,
+    outputLabels: ["delivered or retry scheduled", "dead letter"],
+    icon: "font-awesome/fa-check-square-o",
+    label: function () {
+      return this.name || `outbox ${this.outcome}`;
+    }
+  });
+</script>
+
+<script type="text/html" data-template-name="durable-outbox-config">
+  <div class="form-row">
+    <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-config-input-name">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-filename"><i class="fa fa-database"></i> File</label>
+    <input type="text" id="node-config-input-filename">
+  </div>
+</script>
+
+<script type="text/html" data-template-name="outbox-enqueue">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name">
+  </div>
+  <div class="form-row">
+    <label for="node-input-outbox"><i class="fa fa-database"></i> Outbox</label>
+    <input type="text" id="node-input-outbox">
+  </div>
+  <div class="form-row">
+    <label for="node-input-jobProperty">Job property</label>
+    <input type="text" id="node-input-jobProperty">
+  </div>
+</script>
+
+<script type="text/html" data-template-name="outbox-claim">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name">
+  </div>
+  <div class="form-row">
+    <label for="node-input-outbox"><i class="fa fa-database"></i> Outbox</label>
+    <input type="text" id="node-input-outbox">
+  </div>
+  <div class="form-row">
+    <label for="node-input-sink">Sink</label>
+    <input type="text" id="node-input-sink">
+  </div>
+  <div class="form-row">
+    <label for="node-input-intervalMs">Poll (ms)</label>
+    <input type="number" id="node-input-intervalMs">
+  </div>
+  <div class="form-row">
+    <label for="node-input-leaseMs">Lease (ms)</label>
+    <input type="number" id="node-input-leaseMs">
+  </div>
+  <div class="form-row">
+    <label for="node-input-maxInFlight">Max in flight</label>
+    <input type="number" id="node-input-maxInFlight">
+  </div>
+</script>
+
+<script type="text/html" data-template-name="outbox-settle">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name">
+  </div>
+  <div class="form-row">
+    <label for="node-input-outbox"><i class="fa fa-database"></i> Outbox</label>
+    <input type="text" id="node-input-outbox">
+  </div>
+  <div class="form-row">
+    <label for="node-input-outcome">Outcome</label>
+    <select id="node-input-outcome">
+      <option value="success">Success</option>
+      <option value="retry">Retryable failure</option>
+      <option value="dead">Non-retryable failure</option>
+      <option value="msg">Read msg.outboxOutcome</option>
+    </select>
+  </div>
+</script>
+
+<script type="text/html" data-help-name="durable-outbox-config">
+  <p>Owns a durable SQLite outbox database shared by the other outbox nodes.</p>
+</script>
+
+<script type="text/html" data-help-name="outbox-enqueue">
+  <p>Atomically persists one job or an array of jobs from the configured message property.</p>
+  <p>Each job requires <code>sink</code> and <code>payload</code>. Optional policy fields include
+  <code>dedupeKey</code>, <code>maxAttempts</code>, <code>maxAgeMs</code>,
+  <code>baseDelayMs</code>, and <code>maxDelayMs</code>.</p>
+</script>
+
+<script type="text/html" data-help-name="outbox-claim">
+  <p>Atomically leases the oldest ready job for a sink. It can poll automatically and can also
+  be triggered by any input message.</p>
+</script>
+
+<script type="text/html" data-help-name="outbox-settle">
+  <p>Marks a leased job delivered, schedules a bounded retry, or moves it atomically to the
+  dead-letter table. The second output receives dead-lettered jobs.</p>
+</script>

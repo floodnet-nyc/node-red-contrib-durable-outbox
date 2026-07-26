@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: floodnet_demo
+      POSTGRES_USER: floodnet
+      POSTGRES_PASSWORD: floodnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U floodnet -d floodnet_demo"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./demo/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    ports:
+      - "5432:5432"
+
+  node-red:
+    build:
+      context: .
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: floodnet_demo
+      POSTGRES_USER: floodnet
+      POSTGRES_PASSWORD: floodnet
+      NODE_OPTIONS: "--no-warnings"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./data/outbox:/data/outbox
+      - ./demo/flows.json:/data/flows.json
+    ports:
+      - "1880:1880"

@@ -1,0 +1,26 @@
+{
+  "name": "node-red-contrib-durable-outbox",
+  "version": "0.1.0",
+  "description": "Durable SQLite outbox nodes for Node-RED",
+  "main": "nodes/outbox.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "node-red",
+    "outbox",
+    "sqlite",
+    "retry",
+    "dead-letter"
+  ],
+  "license": "MIT",
+  "node-red": {
+    "nodes": {
+      "durable-outbox": "nodes/outbox.js"
+    }
+  }
+}

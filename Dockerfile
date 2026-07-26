@@ -8,7 +8,9 @@ COPY package.json /opt/outbox-node/package.json
 COPY lib /opt/outbox-node/lib
 COPY nodes /opt/outbox-node/nodes
 
-RUN npm install --prefix /data /opt/outbox-node pg@8.13.1 \
+RUN npm install --prefix /data \
+      /opt/outbox-node \
+      node-red-contrib-postgresql@0.15.4 \
     && mkdir -p /data/outbox \
     && chown -R node-red:root /data /opt/outbox-node
 

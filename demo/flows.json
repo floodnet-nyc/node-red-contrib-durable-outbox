@@ -15,6 +15,31 @@
     "circuitBreakerCooldownMs": 30000
   },
   {
+    "id": "postgres-config",
+    "type": "postgreSQLConfig",
+    "name": "Demo PostgreSQL pool",
+    "host": "POSTGRES_HOST",
+    "hostFieldType": "env",
+    "port": "POSTGRES_PORT",
+    "portFieldType": "env",
+    "database": "POSTGRES_DB",
+    "databaseFieldType": "env",
+    "ssl": "false",
+    "sslFieldType": "bool",
+    "applicationName": "durable-outbox-demo",
+    "applicationNameType": "str",
+    "max": "5",
+    "maxFieldType": "num",
+    "idle": 1000,
+    "idleFieldType": "num",
+    "connectionTimeout": 2000,
+    "connectionTimeoutFieldType": "num",
+    "user": "POSTGRES_USER",
+    "userFieldType": "env",
+    "password": "POSTGRES_PASSWORD",
+    "passwordFieldType": "env"
+  },
+  {
     "id": "generate-reading",
     "type": "inject",
     "z": "demo-flow",
@@ -136,28 +161,41 @@
     "y": 240,
     "wires": [
       [
+        "prepare-postgres-query"
+      ]
+    ]
+  },
+  {
+    "id": "prepare-postgres-query",
+    "type": "function",
+    "z": "demo-flow",
+    "name": "Prepare parameterized upsert",
+    "func": "const reading = msg.payload;\nmsg.query = `\n    INSERT INTO sensor_readings (device_id, observed_at, value_mm)\n    VALUES ($1, $2, $3)\n    ON CONFLICT (device_id, observed_at)\n    DO UPDATE SET value_mm = EXCLUDED.value_mm\n    RETURNING *\n`;\nmsg.params = [\n    reading.device_id,\n    reading.observed_at,\n    reading.value_mm\n];\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 690,
+    "y": 240,
+    "wires": [
+      [
         "postgres-upsert"
       ]
     ]
   },
   {
     "id": "postgres-upsert",
-    "type": "function",
+    "type": "postgresql",
     "z": "demo-flow",
-    "name": "PostgreSQL upsert",
-    "func": "const client = new pg.Client({\n    host: env.get('POSTGRES_HOST'),\n    port: Number(env.get('POSTGRES_PORT') || 5432),\n    database: env.get('POSTGRES_DB'),\n    user: env.get('POSTGRES_USER'),\n    password: env.get('POSTGRES_PASSWORD'),\n    connectionTimeoutMillis: 2000\n});\nconst reading = msg.payload;\ntry {\n    await client.connect();\n    const result = await client.query(\n        `INSERT INTO sensor_readings (device_id, observed_at, value_mm)\n         VALUES ($1, $2, $3)\n         ON CONFLICT (device_id, observed_at)\n         DO UPDATE SET value_mm = EXCLUDED.value_mm\n         RETURNING *`,\n        [reading.device_id, reading.observed_at, reading.value_mm]\n    );\n    msg.payload = result.rows[0];\n    return msg;\n} finally {\n    await client.end().catch(() => {});\n}",
+    "name": "Pooled PostgreSQL upsert",
+    "query": "",
+    "postgreSQLConfig": "postgres-config",
+    "split": false,
+    "rowsPerMsg": 1,
     "outputs": 1,
-    "timeout": 5,
-    "noerr": 0,
-    "initialize": "",
-    "finalize": "",
-    "libs": [
-      {
-        "var": "pg",
-        "module": "pg"
-      }
-    ],
-    "x": 690,
+    "x": 930,
     "y": 240,
     "wires": [
       [
@@ -172,7 +210,7 @@
     "name": "Acknowledge delivery",
     "outbox": "outbox-config",
     "outcome": "success",
-    "x": 930,
+    "x": 1190,
     "y": 240,
     "wires": [
       [
@@ -249,7 +287,7 @@
     "targetType": "msg",
     "statusVal": "",
     "statusType": "auto",
-    "x": 1190,
+    "x": 1450,
     "y": 240,
     "wires": []
   },

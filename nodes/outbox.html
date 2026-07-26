@@ -235,10 +235,115 @@
 </script>
 
 <script type="text/html" data-help-name="outbox-control">
-  <p>Provides message-driven operational control over an outbox. Configure an action or select
-  <code>msg</code> and set <code>msg.outboxAction</code>.</p>
-  <p>Actions are <code>status</code>, <code>pause</code>, <code>resume</code>,
-  <code>retry-now</code>, <code>list-dead</code>, <code>requeue-dead</code>, and
-  <code>requeue-one</code>. Message properties override configured sink, failure class, limit,
-  and dead-letter ID.</p>
+  <p>
+    Provides message-driven operational control over an outbox. Select a fixed action in the
+    editor, or select <code>msg</code> and set <code>msg.outboxAction</code> at runtime.
+    Message properties override the values configured in the editor.
+  </p>
+
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt>outboxAction <span class="property-type">string</span></dt>
+    <dd>
+      Overrides the configured action. Required when the editor action is
+      <code>Read msg.outboxAction</code>.
+    </dd>
+    <dt class="optional">sink <span class="property-type">string</span></dt>
+    <dd>
+      Overrides the configured sink. Required by <code>pause</code>, <code>resume</code>, and
+      <code>retry-now</code>. It is an optional filter for dead-letter actions.
+    </dd>
+    <dt class="optional">failureClass <span class="property-type">string</span></dt>
+    <dd>
+      Overrides the configured failure class. Used by <code>list-dead</code> and
+      <code>requeue-dead</code>; typical values are <code>infrastructure</code> and
+      <code>data</code>.
+    </dd>
+    <dt class="optional">limit <span class="property-type">number</span></dt>
+    <dd>
+      Overrides the configured maximum number of dead letters to list or requeue. The default
+      is 100.
+    </dd>
+    <dt class="optional">deadLetterId <span class="property-type">string</span></dt>
+    <dd>
+      Identifies the job for <code>requeue-one</code>. The node also accepts
+      <code>msg.outbox.id</code> or <code>msg.id</code>, in that order.
+    </dd>
+  </dl>
+
+  <h3>Actions</h3>
+  <dl>
+    <dt><code>status</code></dt>
+    <dd>
+      Returns counts grouped by sink and state, the total dead-letter count, and circuit-breaker
+      state for each known sink. It does not require a sink.
+    </dd>
+
+    <dt><code>pause</code></dt>
+    <dd>
+      Manually pauses claims for the selected sink. Existing pending and delivered records are
+      unchanged. A currently leased delivery is not cancelled.
+    </dd>
+
+    <dt><code>resume</code></dt>
+    <dd>
+      Clears the selected sink's manual pause and open circuit, resets its consecutive-failure
+      count, and makes all pending jobs for that sink immediately eligible. Use this after
+      confirming that PostgreSQL or another sink has recovered.
+    </dd>
+
+    <dt><code>retry-now</code></dt>
+    <dd>
+      Makes all pending jobs for the selected sink immediately eligible, without clearing a
+      manual pause or open circuit. Claims will still wait until the sink is resumed or its
+      circuit cooldown expires.
+    </dd>
+
+    <dt><code>list-dead</code></dt>
+    <dd>
+      Returns dead-letter jobs, optionally filtered by sink and failure class, up to
+      <code>limit</code>. This action does not modify the queue.
+    </dd>
+
+    <dt><code>requeue-dead</code></dt>
+    <dd>
+      Atomically moves matching dead letters back to the pending queue and resets their attempt
+      count. Sink and failure class are optional filters. If both are omitted, the action
+      requeues up to <code>limit</code> dead letters from all sinks.
+    </dd>
+
+    <dt><code>requeue-one</code></dt>
+    <dd>
+      Atomically moves one reviewed dead letter back to the pending queue. It requires a job ID
+      in <code>msg.deadLetterId</code>, <code>msg.outbox.id</code>, or <code>msg.id</code>.
+    </dd>
+  </dl>
+
+  <h3>Outputs</h3>
+  <p>
+    The input message is preserved. The action result is written to <code>msg.payload</code>
+    and to <code>msg.outboxControl.result</code>. The control envelope also contains the
+    resolved <code>action</code> and <code>sink</code>.
+  </p>
+  <pre>{
+  "outboxControl": {
+    "action": "resume",
+    "sink": "postgres-demo",
+    "result": {
+      "released": 17
+    }
+  }
+}</pre>
+
+  <h3>Dynamic example</h3>
+  <pre>msg.outboxAction = "requeue-dead";
+msg.sink = "postgres-demo";
+msg.failureClass = "infrastructure";
+msg.limit = 1000;
+return msg;</pre>
+
+  <p>
+    Invalid actions and missing required properties raise a Node-RED error and can be handled
+    with a Catch node.
+  </p>
 </script>

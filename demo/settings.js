@@ -1,7 +1,7 @@
 module.exports = {
   flowFile: "flows.json",
   credentialSecret: false,
-  functionExternalModules: true,
+  functionExternalModules: false,
   editorTheme: {
     projects: {
       enabled: false

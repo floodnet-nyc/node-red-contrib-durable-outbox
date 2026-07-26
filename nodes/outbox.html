@@ -71,6 +71,25 @@
       return this.name || `outbox ${this.outcome}`;
     }
   });
+
+  RED.nodes.registerType("outbox-control", {
+    category: "storage",
+    color: "#C7E9C0",
+    defaults: {
+      name: { value: "" },
+      outbox: { value: "", type: "durable-outbox-config", required: true },
+      action: { value: "status", required: true },
+      sink: { value: "" },
+      failureClass: { value: "" },
+      limit: { value: 100, validate: RED.validators.number() }
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "font-awesome/fa-sliders",
+    label: function () {
+      return this.name || `outbox ${this.action || "control"}`;
+    }
+  });
 </script>
 
 <script type="text/html" data-template-name="durable-outbox-config">
@@ -154,6 +173,43 @@
   </div>
 </script>
 
+<script type="text/html" data-template-name="outbox-control">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name">
+  </div>
+  <div class="form-row">
+    <label for="node-input-outbox"><i class="fa fa-database"></i> Outbox</label>
+    <input type="text" id="node-input-outbox">
+  </div>
+  <div class="form-row">
+    <label for="node-input-action">Action</label>
+    <select id="node-input-action">
+      <option value="status">Status</option>
+      <option value="pause">Pause sink</option>
+      <option value="resume">Resume and drain sink</option>
+      <option value="retry-now">Retry pending now</option>
+      <option value="list-dead">List dead letters</option>
+      <option value="requeue-dead">Requeue matching dead letters</option>
+      <option value="requeue-one">Requeue one dead letter</option>
+      <option value="msg">Read msg.outboxAction</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-sink">Sink</label>
+    <input type="text" id="node-input-sink">
+  </div>
+  <div class="form-row">
+    <label for="node-input-failureClass">Failure class</label>
+    <input type="text" id="node-input-failureClass"
+      placeholder="infrastructure or data">
+  </div>
+  <div class="form-row">
+    <label for="node-input-limit">Limit</label>
+    <input type="number" id="node-input-limit">
+  </div>
+</script>
+
 <script type="text/html" data-help-name="durable-outbox-config">
   <p>Owns a durable SQLite outbox database shared by the other outbox nodes.</p>
 </script>
@@ -176,4 +232,13 @@
   dead-letter table. Set <code>msg.outboxFailureClass</code> to
   <code>infrastructure</code> to participate in circuit breaking. The second output receives
   dead-lettered jobs.</p>
+</script>
+
+<script type="text/html" data-help-name="outbox-control">
+  <p>Provides message-driven operational control over an outbox. Configure an action or select
+  <code>msg</code> and set <code>msg.outboxAction</code>.</p>
+  <p>Actions are <code>status</code>, <code>pause</code>, <code>resume</code>,
+  <code>retry-now</code>, <code>list-dead</code>, <code>requeue-dead</code>, and
+  <code>requeue-one</code>. Message properties override configured sink, failure class, limit,
+  and dead-letter ID.</p>
 </script>

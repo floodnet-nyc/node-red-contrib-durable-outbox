@@ -199,83 +199,91 @@ module.exports = function registerOutboxNodes(RED) {
     });
   }
 
+  function OutboxControlNode(config) {
+    RED.nodes.createNode(this, config);
+    const node = this;
+    const configNode = getConfigNode(node, config.outbox);
+
+    node.on("input", (msg, send, done) => {
+      send = send || node.send.bind(node);
+      try {
+        const action = msg.outboxAction || config.action || "status";
+        const sink = msg.sink || config.sink || undefined;
+        const failureClass =
+          msg.failureClass || config.failureClass || undefined;
+        const limit = Number(msg.limit || config.limit) || 100;
+        const id = msg.deadLetterId || msg.outbox?.id || msg.id;
+        let result;
+
+        switch (action) {
+          case "status":
+            result = configNode.store.stats();
+            break;
+          case "pause":
+            if (!sink) throw new Error("A sink is required to pause");
+            result = configNode.store.pauseSink(sink);
+            break;
+          case "resume":
+            if (!sink) throw new Error("A sink is required to resume");
+            result = configNode.store.resumeSink(sink, { retryNow: true });
+            break;
+          case "retry-now":
+            if (!sink) throw new Error("A sink is required to retry jobs");
+            result = configNode.store.retryNow(sink);
+            break;
+          case "list-dead": {
+            let rows = configNode.store.listDeadLetters(limit);
+            if (sink) rows = rows.filter((job) => job.sink === sink);
+            if (failureClass) {
+              rows = rows.filter(
+                (job) => job.lastFailureClass === failureClass
+              );
+            }
+            result = { jobs: rows, count: rows.length };
+            break;
+          }
+          case "requeue-dead":
+            result = configNode.store.requeueDeadLetters({
+              sink,
+              failureClass,
+              limit,
+            });
+            break;
+          case "requeue-one":
+            if (!id) {
+              throw new Error(
+                "msg.deadLetterId, msg.outbox.id, or msg.id is required"
+              );
+            }
+            result = configNode.store.requeueDeadLetter(id);
+            break;
+          default:
+            throw new Error(`Unsupported outbox control action: ${action}`);
+        }
+
+        msg.outboxControl = {
+          action,
+          sink: sink || null,
+          result,
+        };
+        msg.payload = result;
+        node.status({
+          fill: "green",
+          shape: "dot",
+          text: sink ? `${action} ${sink}` : action,
+        });
+        send(msg);
+        done();
+      } catch (error) {
+        node.status({ fill: "red", shape: "ring", text: "control failed" });
+        done(error);
+      }
+    });
+  }
+
   RED.nodes.registerType("durable-outbox-config", DurableOutboxConfigNode);
   RED.nodes.registerType("outbox-enqueue", OutboxEnqueueNode);
   RED.nodes.registerType("outbox-claim", OutboxClaimNode);
   RED.nodes.registerType("outbox-settle", OutboxSettleNode);
-
-  if (RED.httpAdmin) {
-    const readPermission = RED.auth?.needsPermission
-      ? RED.auth.needsPermission("durable-outbox.read")
-      : (request, response, next) => next();
-    const writePermission = RED.auth?.needsPermission
-      ? RED.auth.needsPermission("durable-outbox.write")
-      : (request, response, next) => next();
-
-    const getStore = (request, response) => {
-      const configNode = RED.nodes.getNode(request.params.id);
-      if (!configNode?.store) {
-        response.status(404).json({ error: "Outbox configuration not found" });
-        return null;
-      }
-      return configNode.store;
-    };
-
-    RED.httpAdmin.get(
-      "/durable-outbox/:id/status",
-      readPermission,
-      (request, response) => {
-        const store = getStore(request, response);
-        if (store) response.json(store.stats());
-      }
-    );
-
-    RED.httpAdmin.post(
-      "/durable-outbox/:id/sinks/:sink/pause",
-      writePermission,
-      (request, response) => {
-        const store = getStore(request, response);
-        if (store) response.json(store.pauseSink(request.params.sink));
-      }
-    );
-
-    RED.httpAdmin.post(
-      "/durable-outbox/:id/sinks/:sink/resume",
-      writePermission,
-      (request, response) => {
-        const store = getStore(request, response);
-        if (store) {
-          response.json(
-            store.resumeSink(request.params.sink, { retryNow: true })
-          );
-        }
-      }
-    );
-
-    RED.httpAdmin.post(
-      "/durable-outbox/:id/sinks/:sink/retry-now",
-      writePermission,
-      (request, response) => {
-        const store = getStore(request, response);
-        if (store) response.json(store.retryNow(request.params.sink));
-      }
-    );
-
-    RED.httpAdmin.post(
-      "/durable-outbox/:id/dead-letters/requeue",
-      writePermission,
-      (request, response) => {
-        const store = getStore(request, response);
-        if (store) {
-          response.json(
-            store.requeueDeadLetters({
-              sink: request.body?.sink,
-              failureClass: request.body?.failureClass,
-              limit: request.body?.limit,
-            })
-          );
-        }
-      }
-    );
-  }
+  RED.nodes.registerType("outbox-control", OutboxControlNode);
 };

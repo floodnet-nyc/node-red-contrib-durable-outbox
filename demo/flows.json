@@ -326,13 +326,141 @@
     "wires": []
   },
   {
+    "id": "status-inject",
+    "type": "inject",
+    "z": "demo-flow",
+    "name": "Inspect outbox status",
+    "props": [],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 160,
+    "y": 480,
+    "wires": [
+      [
+        "status-control"
+      ]
+    ]
+  },
+  {
+    "id": "status-control",
+    "type": "outbox-control",
+    "z": "demo-flow",
+    "name": "Outbox status",
+    "outbox": "outbox-config",
+    "action": "status",
+    "sink": "",
+    "failureClass": "",
+    "limit": 100,
+    "x": 430,
+    "y": 480,
+    "wires": [
+      [
+        "control-debug"
+      ]
+    ]
+  },
+  {
+    "id": "resume-inject",
+    "type": "inject",
+    "z": "demo-flow",
+    "name": "PostgreSQL recovered",
+    "props": [],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 170,
+    "y": 540,
+    "wires": [
+      [
+        "resume-control"
+      ]
+    ]
+  },
+  {
+    "id": "resume-control",
+    "type": "outbox-control",
+    "z": "demo-flow",
+    "name": "Resume and drain PostgreSQL",
+    "outbox": "outbox-config",
+    "action": "resume",
+    "sink": "postgres-demo",
+    "failureClass": "",
+    "limit": 100,
+    "x": 470,
+    "y": 540,
+    "wires": [
+      [
+        "control-debug"
+      ]
+    ]
+  },
+  {
+    "id": "requeue-dead-inject",
+    "type": "inject",
+    "z": "demo-flow",
+    "name": "Recover expired outage jobs",
+    "props": [],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 190,
+    "y": 600,
+    "wires": [
+      [
+        "requeue-dead-control"
+      ]
+    ]
+  },
+  {
+    "id": "requeue-dead-control",
+    "type": "outbox-control",
+    "z": "demo-flow",
+    "name": "Requeue infrastructure dead letters",
+    "outbox": "outbox-config",
+    "action": "requeue-dead",
+    "sink": "postgres-demo",
+    "failureClass": "infrastructure",
+    "limit": 1000,
+    "x": 500,
+    "y": 600,
+    "wires": [
+      [
+        "control-debug"
+      ]
+    ]
+  },
+  {
+    "id": "control-debug",
+    "type": "debug",
+    "z": "demo-flow",
+    "name": "Outbox control result",
+    "active": true,
+    "tosidebar": true,
+    "console": true,
+    "tostatus": false,
+    "complete": "outboxControl",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 800,
+    "y": 540,
+    "wires": []
+  },
+  {
     "id": "flow-comment",
     "type": "comment",
     "z": "demo-flow",
     "name": "Stop PostgreSQL: docker compose stop postgres. Jobs remain in SQLite and drain after restart.",
     "info": "",
-    "x": 450,
-    "y": 440,
+    "x": 440,
+    "y": 680,
     "wires": []
   }
 ]

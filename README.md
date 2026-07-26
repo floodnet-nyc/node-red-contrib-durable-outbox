@@ -86,6 +86,22 @@ msg.outboxStatus = 503;
 The first output receives delivered jobs and scheduled retries. The second
 output receives jobs moved to the dead-letter table.
 
+### `outbox-control`
+
+Provides message-driven operations inside a normal Node-RED flow. An action
+can be fixed in the editor or supplied dynamically:
+
+```js
+msg.outboxAction = "resume";
+msg.sink = "postgres";
+return msg;
+```
+
+Supported actions are `status`, `pause`, `resume`, `retry-now`, `list-dead`,
+`requeue-dead`, and `requeue-one`. `resume` closes the sink circuit and makes
+all pending work immediately eligible. Results are returned in both
+`msg.payload` and `msg.outboxControl.result`.
+
 ## Tests
 
 Run the complete test suite:
@@ -107,7 +123,7 @@ The tests cover:
 - retry-until-expired infrastructure policy;
 - per-sink circuit breaking and manual resume;
 - filtered bulk dead-letter replay;
-- registration and message behavior of all four Node-RED nodes.
+- registration and message behavior of all five Node-RED nodes.
 
 ## Docker Compose PostgreSQL demo
 
@@ -119,7 +135,9 @@ docker compose up --build
 
 Open [Node-RED](http://localhost:1880). The demo creates one sensor reading
 every two seconds, commits it to SQLite, leases it to a PostgreSQL worker, and
-acknowledges it only after the upsert succeeds.
+acknowledges it only after the upsert succeeds. Delivery uses
+`node-red-contrib-postgresql` 0.15.4 with an environment-configured connection
+pool and a parameterized `msg.query` / `msg.params` upsert.
 
 Inspect delivered rows:
 
@@ -151,51 +169,36 @@ docker compose exec node-red node -e \
   'const {DatabaseSync}=require("node:sqlite"); const db=new DatabaseSync("/data/outbox/outbox.sqlite"); console.table(db.prepare("SELECT sink,state,count(*) count FROM outbox_jobs GROUP BY sink,state").all())'
 ```
 
-## Operations API
+## Message-driven operations
 
-The nodes register authenticated Node-RED admin endpoints. For the demo,
-`outbox-config` is the configuration-node ID and `postgres-demo` is the sink.
+The demo includes visible Inject → `outbox-control` → Debug flows for:
 
-Inspect queue and circuit state:
+- inspecting queue and circuit state;
+- resuming PostgreSQL and immediately draining pending work;
+- bulk-requeueing expired PostgreSQL infrastructure failures.
 
-```sh
-curl http://localhost:1880/durable-outbox/outbox-config/status
+The same node can be driven dynamically by a Dashboard button, MQTT command,
+authenticated HTTP-In flow, or another operational workflow:
+
+```js
+msg.outboxAction = "requeue-dead";
+msg.sink = "postgres-demo";
+msg.failureClass = "infrastructure";
+msg.limit = 1000;
+return msg;
 ```
 
-Pause claims manually:
+To replay one reviewed dead letter:
 
-```sh
-curl -X POST \
-  http://localhost:1880/durable-outbox/outbox-config/sinks/postgres-demo/pause
+```js
+msg.outboxAction = "requeue-one";
+msg.deadLetterId = "the-job-id";
+return msg;
 ```
 
-Resume the sink, close its circuit, and make all pending jobs immediately
-eligible:
-
-```sh
-curl -X POST \
-  http://localhost:1880/durable-outbox/outbox-config/sinks/postgres-demo/resume
-```
-
-Make pending work immediately eligible without closing a paused circuit:
-
-```sh
-curl -X POST \
-  http://localhost:1880/durable-outbox/outbox-config/sinks/postgres-demo/retry-now
-```
-
-Bulk-requeue dead letters that represent expired PostgreSQL infrastructure
-failures:
-
-```sh
-curl -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"sink":"postgres-demo","failureClass":"infrastructure","limit":1000}' \
-  http://localhost:1880/durable-outbox/outbox-config/dead-letters/requeue
-```
-
-When Node-RED authentication is enabled, these routes require
-`durable-outbox.read` or `durable-outbox.write` permission.
+There are no built-in HTTP management endpoints. Authentication, authorization,
+auditing, and operator presentation remain part of the surrounding Node-RED
+flow.
 
 ## Operational notes
 

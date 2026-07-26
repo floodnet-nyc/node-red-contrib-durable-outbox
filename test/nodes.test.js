@@ -9,7 +9,6 @@ function createHarness() {
   const types = new Map();
   const instances = new Map();
   let idCounter = 0;
-  const adminRoutes = { get: new Map(), post: new Map() };
 
   const RED = {
     nodes: {
@@ -40,19 +39,6 @@ function createHarness() {
         return `message-${++idCounter}`;
       },
     },
-    auth: {
-      needsPermission() {
-        return (request, response, next) => next();
-      },
-    },
-    httpAdmin: {
-      get(path, ...handlers) {
-        adminRoutes.get.set(path, handlers);
-      },
-      post(path, ...handlers) {
-        adminRoutes.post.set(path, handlers);
-      },
-    },
   };
 
   registerNodes(RED);
@@ -80,26 +66,20 @@ function createHarness() {
     });
   }
 
-  return { instantiate, input, close, types, adminRoutes };
+  return { instantiate, input, close, types };
 }
 
-test("registers and exercises config, enqueue, claim, and settle nodes", async () => {
+test("registers and exercises all outbox nodes", async () => {
   const harness = createHarness();
   assert.deepEqual(
     [...harness.types.keys()].sort(),
     [
       "durable-outbox-config",
       "outbox-claim",
+      "outbox-control",
       "outbox-enqueue",
       "outbox-settle",
     ]
-  );
-  assert.equal(harness.adminRoutes.get.has("/durable-outbox/:id/status"), true);
-  assert.equal(
-    harness.adminRoutes.post.has(
-      "/durable-outbox/:id/dead-letters/requeue"
-    ),
-    true
   );
 
   const config = harness.instantiate("durable-outbox-config", {
@@ -124,6 +104,11 @@ test("registers and exercises config, enqueue, claim, and settle nodes", async (
     outbox: "outbox",
     outcome: "success",
   });
+  const control = harness.instantiate("outbox-control", {
+    id: "control",
+    outbox: "outbox",
+    action: "status",
+  });
 
   await harness.input(enqueue, {
     jobs: {
@@ -142,6 +127,10 @@ test("registers and exercises config, enqueue, claim, and settle nodes", async (
   await harness.input(settle, delivery);
   assert.equal(settle.sent[0][0].outboxSettlement.state, "delivered");
   assert.equal(settle.sent[0][1], null);
+
+  await harness.input(control);
+  assert.equal(control.sent[0].outboxControl.action, "status");
+  assert.equal(control.sent[0].payload.jobs[0].state, "delivered");
 
   await harness.close(claim);
   await harness.close(config);
@@ -166,6 +155,10 @@ test("settle sends non-retryable failures to its dead-letter output", async () =
     outbox: "outbox",
     outcome: "dead",
   });
+  const control = harness.instantiate("outbox-control", {
+    outbox: "outbox",
+    action: "msg",
+  });
 
   await harness.input(enqueue, {
     outboxJobs: { sink: "fieldkit", payload: { invalid: true } },
@@ -179,6 +172,13 @@ test("settle sends non-retryable failures to its dead-letter output", async () =
   assert.equal(settle.sent[0][0], null);
   assert.equal(settle.sent[0][1].outboxSettlement.state, "dead");
   assert.equal(config.store.listDeadLetters().length, 1);
+
+  await harness.input(control, {
+    outboxAction: "requeue-one",
+    deadLetterId: message.outbox.id,
+  });
+  assert.equal(control.sent[0].payload.state, "pending");
+  assert.equal(config.store.listDeadLetters().length, 0);
 
   await harness.close(claim);
   await harness.close(config);

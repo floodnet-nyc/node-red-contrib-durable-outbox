@@ -3,7 +3,17 @@
     category: "config",
     defaults: {
       name: { value: "" },
-      filename: { value: "/data/outbox/outbox.sqlite", required: true }
+      filename: { value: "/data/outbox/outbox.sqlite", required: true },
+      circuitBreakerThreshold: {
+        value: 3,
+        required: true,
+        validate: RED.validators.number()
+      },
+      circuitBreakerCooldownMs: {
+        value: 30000,
+        required: true,
+        validate: RED.validators.number()
+      }
     },
     label: function () {
       return this.name || this.filename || "durable outbox";
@@ -71,6 +81,14 @@
   <div class="form-row">
     <label for="node-config-input-filename"><i class="fa fa-database"></i> File</label>
     <input type="text" id="node-config-input-filename">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-circuitBreakerThreshold">Circuit failures</label>
+    <input type="number" id="node-config-input-circuitBreakerThreshold">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-circuitBreakerCooldownMs">Cooldown (ms)</label>
+    <input type="number" id="node-config-input-circuitBreakerCooldownMs">
   </div>
 </script>
 
@@ -144,7 +162,8 @@
   <p>Atomically persists one job or an array of jobs from the configured message property.</p>
   <p>Each job requires <code>sink</code> and <code>payload</code>. Optional policy fields include
   <code>dedupeKey</code>, <code>maxAttempts</code>, <code>maxAgeMs</code>,
-  <code>baseDelayMs</code>, and <code>maxDelayMs</code>.</p>
+  <code>baseDelayMs</code>, <code>maxDelayMs</code>, and
+  <code>retryUntilExpired</code>.</p>
 </script>
 
 <script type="text/html" data-help-name="outbox-claim">
@@ -154,5 +173,7 @@
 
 <script type="text/html" data-help-name="outbox-settle">
   <p>Marks a leased job delivered, schedules a bounded retry, or moves it atomically to the
-  dead-letter table. The second output receives dead-lettered jobs.</p>
+  dead-letter table. Set <code>msg.outboxFailureClass</code> to
+  <code>infrastructure</code> to participate in circuit breaking. The second output receives
+  dead-lettered jobs.</p>
 </script>

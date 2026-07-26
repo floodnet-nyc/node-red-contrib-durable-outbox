@@ -9,6 +9,7 @@ function createHarness() {
   const types = new Map();
   const instances = new Map();
   let idCounter = 0;
+  const adminRoutes = { get: new Map(), post: new Map() };
 
   const RED = {
     nodes: {
@@ -39,6 +40,19 @@ function createHarness() {
         return `message-${++idCounter}`;
       },
     },
+    auth: {
+      needsPermission() {
+        return (request, response, next) => next();
+      },
+    },
+    httpAdmin: {
+      get(path, ...handlers) {
+        adminRoutes.get.set(path, handlers);
+      },
+      post(path, ...handlers) {
+        adminRoutes.post.set(path, handlers);
+      },
+    },
   };
 
   registerNodes(RED);
@@ -66,7 +80,7 @@ function createHarness() {
     });
   }
 
-  return { instantiate, input, close, types };
+  return { instantiate, input, close, types, adminRoutes };
 }
 
 test("registers and exercises config, enqueue, claim, and settle nodes", async () => {
@@ -79,6 +93,13 @@ test("registers and exercises config, enqueue, claim, and settle nodes", async (
       "outbox-enqueue",
       "outbox-settle",
     ]
+  );
+  assert.equal(harness.adminRoutes.get.has("/durable-outbox/:id/status"), true);
+  assert.equal(
+    harness.adminRoutes.post.has(
+      "/durable-outbox/:id/dead-letters/requeue"
+    ),
+    true
   );
 
   const config = harness.instantiate("durable-outbox-config", {

@@ -27,7 +27,8 @@ msg.outboxJobs = {
     payload: msg.payload,
     schemaVersion: 1,
     maxAttempts: 10,
-    maxAgeMs: 24 * 60 * 60 * 1000,
+    retryUntilExpired: true,
+    maxAgeMs: 7 * 24 * 60 * 60 * 1000,
     baseDelayMs: 2000,
     maxDelayMs: 5 * 60 * 1000
 };
@@ -37,6 +38,11 @@ return msg;
 `dedupeKey` is optional. If omitted, the node hashes the sink and canonical
 payload. A duplicate enqueue returns the existing job instead of creating
 another one.
+
+With `retryUntilExpired: true`, retryable infrastructure failures ignore the
+attempt count and remain active until `maxAgeMs`. Backoff is still bounded by
+`maxDelayMs`. This is the recommended policy for idempotent PostgreSQL
+deliveries.
 
 ### `outbox-claim`
 
@@ -60,6 +66,10 @@ The output has this shape:
 
 An expired lease is eligible for recovery by another poll.
 
+After the configured number of consecutive infrastructure failures, claims
+for that sink pause for the circuit-breaker cooldown. The next claim after the
+cooldown is a half-open probe. A successful delivery closes the circuit.
+
 ### `outbox-settle`
 
 Settles `msg.outbox.id`. Configure separate instances for success,
@@ -68,6 +78,7 @@ retryable failure, or non-retryable failure. The dynamic mode reads:
 ```js
 msg.outboxOutcome = "success"; // any other value means failure
 msg.outboxRetryable = true;
+msg.outboxFailureClass = "infrastructure"; // or "data"
 msg.outboxError = msg.error;
 msg.outboxStatus = 503;
 ```
@@ -93,6 +104,9 @@ The tests cover:
 - successful delivery retention;
 - retry exhaustion and non-retryable dead letters;
 - dead-letter replay;
+- retry-until-expired infrastructure policy;
+- per-sink circuit breaking and manual resume;
+- filtered bulk dead-letter replay;
 - registration and message behavior of all four Node-RED nodes.
 
 ## Docker Compose PostgreSQL demo
@@ -124,8 +138,11 @@ docker compose start postgres
 ```
 
 While PostgreSQL is stopped, Node-RED continues committing generated readings
-to the `outbox-data` volume and schedules bounded retries. Once PostgreSQL is
-available, the worker drains the pending jobs.
+to the `outbox-data` volume, applies bounded backoff, and opens the PostgreSQL
+circuit after repeated failures. Once the cooldown expires and PostgreSQL is
+available, a successful probe closes the circuit and the worker drains the
+pending jobs. These demo jobs retry for up to seven days and do not dead-letter
+merely because their attempt count grows.
 
 To inspect the SQLite queue from the host without modifying it:
 
@@ -133,6 +150,52 @@ To inspect the SQLite queue from the host without modifying it:
 docker compose exec node-red node -e \
   'const {DatabaseSync}=require("node:sqlite"); const db=new DatabaseSync("/data/outbox/outbox.sqlite"); console.table(db.prepare("SELECT sink,state,count(*) count FROM outbox_jobs GROUP BY sink,state").all())'
 ```
+
+## Operations API
+
+The nodes register authenticated Node-RED admin endpoints. For the demo,
+`outbox-config` is the configuration-node ID and `postgres-demo` is the sink.
+
+Inspect queue and circuit state:
+
+```sh
+curl http://localhost:1880/durable-outbox/outbox-config/status
+```
+
+Pause claims manually:
+
+```sh
+curl -X POST \
+  http://localhost:1880/durable-outbox/outbox-config/sinks/postgres-demo/pause
+```
+
+Resume the sink, close its circuit, and make all pending jobs immediately
+eligible:
+
+```sh
+curl -X POST \
+  http://localhost:1880/durable-outbox/outbox-config/sinks/postgres-demo/resume
+```
+
+Make pending work immediately eligible without closing a paused circuit:
+
+```sh
+curl -X POST \
+  http://localhost:1880/durable-outbox/outbox-config/sinks/postgres-demo/retry-now
+```
+
+Bulk-requeue dead letters that represent expired PostgreSQL infrastructure
+failures:
+
+```sh
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"sink":"postgres-demo","failureClass":"infrastructure","limit":1000}' \
+  http://localhost:1880/durable-outbox/outbox-config/dead-letters/requeue
+```
+
+When Node-RED authentication is enabled, these routes require
+`durable-outbox.read` or `durable-outbox.write` permission.
 
 ## Operational notes
 

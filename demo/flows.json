@@ -10,7 +10,9 @@
     "id": "outbox-config",
     "type": "durable-outbox-config",
     "name": "Demo outbox",
-    "filename": "/data/outbox/outbox.sqlite"
+    "filename": "/data/outbox/outbox.sqlite",
+    "circuitBreakerThreshold": 3,
+    "circuitBreakerCooldownMs": 30000
   },
   {
     "id": "generate-reading",
@@ -36,7 +38,7 @@
     "type": "function",
     "z": "demo-flow",
     "name": "Build durable PostgreSQL job",
-    "func": "const observedAt = new Date();\nconst sequence = context.get('sequence') || 0;\ncontext.set('sequence', sequence + 1);\nconst reading = {\n    device_id: 'demo-sensor-1',\n    observed_at: observedAt.toISOString(),\n    value_mm: 100 + (sequence % 50)\n};\nmsg.outboxJobs = {\n    sink: 'postgres-demo',\n    dedupeKey: `reading:${reading.device_id}:${reading.observed_at}`,\n    payload: reading,\n    maxAttempts: 8,\n    maxAgeMs: 3600000,\n    baseDelayMs: 1000,\n    maxDelayMs: 30000\n};\nmsg.payload = reading;\nreturn msg;",
+    "func": "const observedAt = new Date();\nconst sequence = context.get('sequence') || 0;\ncontext.set('sequence', sequence + 1);\nconst reading = {\n    device_id: 'demo-sensor-1',\n    observed_at: observedAt.toISOString(),\n    value_mm: 100 + (sequence % 50)\n};\nmsg.outboxJobs = {\n    sink: 'postgres-demo',\n    dedupeKey: `reading:${reading.device_id}:${reading.observed_at}`,\n    payload: reading,\n    retryUntilExpired: true,\n    maxAttempts: 8,\n    maxAgeMs: 7 * 24 * 60 * 60 * 1000,\n    baseDelayMs: 1000,\n    maxDelayMs: 5 * 60 * 1000\n};\nmsg.payload = reading;\nreturn msg;",
     "outputs": 1,
     "timeout": 0,
     "noerr": 0,
@@ -201,7 +203,7 @@
     "type": "function",
     "z": "demo-flow",
     "name": "Classify PostgreSQL failure",
-    "func": "const nonRetryable = new Set([\n    '22001', '22003', '22P02',\n    '23502', '23503', '23505', '23514',\n    '42601', '42703', '42P01'\n]);\nconst code = msg.error?.code;\nmsg.outboxOutcome = 'failure';\nmsg.outboxRetryable = !nonRetryable.has(code);\nmsg.outboxError = msg.error || `PostgreSQL delivery failed (${code || 'unknown'})`;\nreturn msg;",
+    "func": "const permanentCodes = new Set([\n    '22001', '22003', '22P02',\n    '23502', '23503', '23505', '23514',\n    '42601', '42703', '42P01'\n]);\nconst code = msg.error?.code;\nconst permanent = permanentCodes.has(code);\nmsg.outboxOutcome = 'failure';\nmsg.outboxRetryable = !permanent;\nmsg.outboxFailureClass = permanent ? 'data' : 'infrastructure';\nmsg.outboxError = msg.error || `PostgreSQL delivery failed (${code || 'unknown'})`;\nreturn msg;",
     "outputs": 1,
     "timeout": 0,
     "noerr": 0,

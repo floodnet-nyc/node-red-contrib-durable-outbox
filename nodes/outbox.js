@@ -6,6 +6,10 @@ module.exports = function registerOutboxNodes(RED) {
   function DurableOutboxConfigNode(config) {
     RED.nodes.createNode(this, config);
     this.filename = config.filename;
+    this.circuitBreakerThreshold =
+      Number(config.circuitBreakerThreshold) || 3;
+    this.circuitBreakerCooldownMs =
+      Number(config.circuitBreakerCooldownMs) || 30_000;
     try {
       this.store = new OutboxStore(this.filename);
     } catch (error) {
@@ -90,7 +94,21 @@ module.exports = function registerOutboxNodes(RED) {
             outbox: job,
           });
         } else {
-          node.status({ fill: "green", shape: "dot", text: "" });
+          const control = configNode.store.getSinkControl(sink);
+          if (control.manuallyPaused) {
+            node.status({ fill: "yellow", shape: "dot", text: "paused" });
+          } else if (
+            control.pausedUntil != null &&
+            control.pausedUntil > Date.now()
+          ) {
+            node.status({
+              fill: "yellow",
+              shape: "ring",
+              text: "circuit open",
+            });
+          } else {
+            node.status({ fill: "green", shape: "dot", text: "" });
+          }
         }
         if (done) done();
       } catch (error) {
@@ -144,12 +162,18 @@ module.exports = function registerOutboxNodes(RED) {
           (success ? null : "Delivery failed");
         const status =
           msg.statusCode ?? msg.outboxStatus ?? msg.payload?.statusCode;
+        const failureClass =
+          msg.outboxFailureClass ||
+          (retryable ? "infrastructure" : "data");
 
         const result = configNode.store.settle(id, {
           success,
           retryable,
           error,
           status,
+          failureClass,
+          circuitBreakerThreshold: configNode.circuitBreakerThreshold,
+          circuitBreakerCooldownMs: configNode.circuitBreakerCooldownMs,
         });
         msg.outboxSettlement = result;
 
@@ -179,4 +203,79 @@ module.exports = function registerOutboxNodes(RED) {
   RED.nodes.registerType("outbox-enqueue", OutboxEnqueueNode);
   RED.nodes.registerType("outbox-claim", OutboxClaimNode);
   RED.nodes.registerType("outbox-settle", OutboxSettleNode);
+
+  if (RED.httpAdmin) {
+    const readPermission = RED.auth?.needsPermission
+      ? RED.auth.needsPermission("durable-outbox.read")
+      : (request, response, next) => next();
+    const writePermission = RED.auth?.needsPermission
+      ? RED.auth.needsPermission("durable-outbox.write")
+      : (request, response, next) => next();
+
+    const getStore = (request, response) => {
+      const configNode = RED.nodes.getNode(request.params.id);
+      if (!configNode?.store) {
+        response.status(404).json({ error: "Outbox configuration not found" });
+        return null;
+      }
+      return configNode.store;
+    };
+
+    RED.httpAdmin.get(
+      "/durable-outbox/:id/status",
+      readPermission,
+      (request, response) => {
+        const store = getStore(request, response);
+        if (store) response.json(store.stats());
+      }
+    );
+
+    RED.httpAdmin.post(
+      "/durable-outbox/:id/sinks/:sink/pause",
+      writePermission,
+      (request, response) => {
+        const store = getStore(request, response);
+        if (store) response.json(store.pauseSink(request.params.sink));
+      }
+    );
+
+    RED.httpAdmin.post(
+      "/durable-outbox/:id/sinks/:sink/resume",
+      writePermission,
+      (request, response) => {
+        const store = getStore(request, response);
+        if (store) {
+          response.json(
+            store.resumeSink(request.params.sink, { retryNow: true })
+          );
+        }
+      }
+    );
+
+    RED.httpAdmin.post(
+      "/durable-outbox/:id/sinks/:sink/retry-now",
+      writePermission,
+      (request, response) => {
+        const store = getStore(request, response);
+        if (store) response.json(store.retryNow(request.params.sink));
+      }
+    );
+
+    RED.httpAdmin.post(
+      "/durable-outbox/:id/dead-letters/requeue",
+      writePermission,
+      (request, response) => {
+        const store = getStore(request, response);
+        if (store) {
+          response.json(
+            store.requeueDeadLetters({
+              sink: request.body?.sink,
+              failureClass: request.body?.failureClass,
+              limit: request.body?.limit,
+            })
+          );
+        }
+      }
+    );
+  }
 };

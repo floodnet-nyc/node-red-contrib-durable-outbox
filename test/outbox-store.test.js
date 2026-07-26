@@ -5,6 +5,7 @@ const { mkdtempSync, rmSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 const test = require("node:test");
+const { DatabaseSync } = require("node:sqlite");
 const { OutboxStore, stableStringify } = require("../lib/outbox-store");
 
 function withStore(t, options = {}) {
@@ -24,6 +25,48 @@ test("stableStringify canonicalizes object keys", () => {
   );
 });
 
+test("migrates databases created by the original schema", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "durable-outbox-migration-"));
+  const filename = join(directory, "outbox.sqlite");
+  const legacy = new DatabaseSync(filename);
+  legacy.exec(`
+    CREATE TABLE outbox_jobs (
+      id TEXT PRIMARY KEY, dedupe_key TEXT UNIQUE, sink TEXT,
+      schema_version INTEGER, payload_json TEXT, state TEXT,
+      attempts INTEGER, max_attempts INTEGER, max_age_ms INTEGER,
+      base_delay_ms INTEGER, max_delay_ms INTEGER, available_at INTEGER,
+      lease_until INTEGER, first_error TEXT, last_error TEXT,
+      last_status INTEGER, created_at INTEGER, delivered_at INTEGER
+    );
+    CREATE TABLE dead_letter_jobs (
+      id TEXT PRIMARY KEY, dedupe_key TEXT, sink TEXT,
+      schema_version INTEGER, payload_json TEXT, attempts INTEGER,
+      max_attempts INTEGER, max_age_ms INTEGER, base_delay_ms INTEGER,
+      max_delay_ms INTEGER, first_error TEXT, last_error TEXT,
+      last_status INTEGER, created_at INTEGER, failed_at INTEGER
+    );
+  `);
+  legacy.close();
+
+  const store = new OutboxStore(filename);
+  t.after(() => {
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
+  });
+  const activeColumns = store.db
+    .prepare("PRAGMA table_info(outbox_jobs)")
+    .all()
+    .map((column) => column.name);
+  const deadColumns = store.db
+    .prepare("PRAGMA table_info(dead_letter_jobs)")
+    .all()
+    .map((column) => column.name);
+  assert.equal(activeColumns.includes("retry_until_expired"), true);
+  assert.equal(activeColumns.includes("last_failure_class"), true);
+  assert.equal(deadColumns.includes("retry_until_expired"), true);
+  assert.equal(deadColumns.includes("last_failure_class"), true);
+});
+
 test("enqueue is atomic and deduplicates equivalent jobs", (t) => {
   const store = withStore(t, { now: () => 1_000 });
   assert.throws(
@@ -34,7 +77,7 @@ test("enqueue is atomic and deduplicates equivalent jobs", (t) => {
       ]),
     /requires a payload/
   );
-  assert.deepEqual(store.stats(), { jobs: [], deadLetters: 0 });
+  assert.deepEqual(store.stats(), { jobs: [], deadLetters: 0, controls: [] });
 
   const first = store.enqueue({
     sink: "postgres",
@@ -193,4 +236,72 @@ test("non-retryable errors dead-letter immediately", (t) => {
   });
   assert.equal(result.state, "dead");
   assert.equal(result.reason, "non-retryable");
+});
+
+test("infrastructure jobs retry past attempt limit and open a circuit", (t) => {
+  let now = 40_000;
+  const store = withStore(t, { now: () => now, random: () => 0 });
+  const [queued] = store.enqueue({
+    sink: "postgres",
+    payload: { value: 10 },
+    maxAttempts: 1,
+    retryUntilExpired: true,
+    maxAgeMs: 7 * 86_400_000,
+  });
+
+  store.claim({ sink: "postgres" });
+  const retry = store.settle(queued.id, {
+    success: false,
+    retryable: true,
+    failureClass: "infrastructure",
+    error: { code: "ETIMEDOUT" },
+    circuitBreakerThreshold: 1,
+    circuitBreakerCooldownMs: 30_000,
+  });
+  assert.equal(retry.state, "pending");
+  assert.equal(retry.circuit.pausedUntil, now + 30_000);
+  assert.equal(store.claim({ sink: "postgres" }), null);
+
+  const resumed = store.resumeSink("postgres", { retryNow: true });
+  assert.equal(resumed.released, 1);
+  const secondAttempt = store.claim({ sink: "postgres" });
+  assert.equal(secondAttempt.attempts, 2);
+  assert.equal(store.settle(queued.id, { success: true }).state, "delivered");
+  assert.equal(store.getSinkControl("postgres").consecutiveFailures, 0);
+});
+
+test("bulk dead-letter recovery filters by sink and failure class", (t) => {
+  const store = withStore(t);
+  const jobs = store.enqueue([
+    {
+      sink: "postgres",
+      dedupeKey: "postgres-dead",
+      payload: { value: 11 },
+    },
+    {
+      sink: "fieldkit",
+      dedupeKey: "fieldkit-dead",
+      payload: { value: 12 },
+    },
+  ]);
+  for (const job of jobs) {
+    const claimed = store.claim({
+      sink: job.dedupeKey.startsWith("postgres") ? "postgres" : "fieldkit",
+    });
+    store.settle(claimed.id, {
+      success: false,
+      retryable: false,
+      failureClass: "infrastructure",
+      error: "expired outage",
+    });
+  }
+
+  const result = store.requeueDeadLetters({
+    sink: "postgres",
+    failureClass: "infrastructure",
+  });
+  assert.equal(result.requeued, 1);
+  assert.equal(store.getJob(jobs[0].id).state, "pending");
+  assert.equal(store.getJob(jobs[1].id), null);
+  assert.equal(store.listDeadLetters().length, 1);
 });

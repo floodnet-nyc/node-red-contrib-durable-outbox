@@ -46,7 +46,6 @@
         "nodes": [
             "postgres-catch",
             "classify-postgres",
-            "settle-failure",
             "retry-debug",
             "dead-debug"
         ],
@@ -121,7 +120,6 @@
         "nodes": [
             "49135bf8bd191fb8",
             "b7dc8125b7065c8b",
-            "330eb9a978225548",
             "d1d87d3262c71179",
             "510127e721507621"
         ],
@@ -435,9 +433,12 @@
         "y": 240,
         "wires": [
             [
-                "delivered-debug"
+                "delivered-debug",
+                "retry-debug"
             ],
-            []
+            [
+                "dead-debug"
+            ]
         ],
         "l": false
     },
@@ -476,26 +477,7 @@
         "y": 340,
         "wires": [
             [
-                "settle-failure"
-            ]
-        ]
-    },
-    {
-        "id": "settle-failure",
-        "type": "outbox-settle",
-        "z": "demo-flow",
-        "g": "8d802f1c995e82e8",
-        "name": "Retry or dead-letter",
-        "sink": "postgres-outbox-sink",
-        "outcome": "msg",
-        "x": 630,
-        "y": 340,
-        "wires": [
-            [
-                "retry-debug"
-            ],
-            [
-                "dead-debug"
+                "settle-success"
             ]
         ]
     },
@@ -779,9 +761,12 @@
         "y": 260,
         "wires": [
             [
-                "89377ce555965f22"
+                "89377ce555965f22",
+                "d1d87d3262c71179"
             ],
-            []
+            [
+                "510127e721507621"
+            ]
         ],
         "l": false
     },
@@ -839,26 +824,7 @@
         "y": 360,
         "wires": [
             [
-                "330eb9a978225548"
-            ]
-        ]
-    },
-    {
-        "id": "330eb9a978225548",
-        "type": "outbox-settle",
-        "z": "f9d60f4c68faa702",
-        "g": "bd059afaef9221ff",
-        "name": "Retry or dead-letter",
-        "sink": "7cb28bdf3de0af1d",
-        "outcome": "msg",
-        "x": 630,
-        "y": 360,
-        "wires": [
-            [
-                "d1d87d3262c71179"
-            ],
-            [
-                "510127e721507621"
+                "84b70f32fa160c6e"
             ]
         ]
     },

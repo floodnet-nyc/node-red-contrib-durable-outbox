@@ -361,7 +361,6 @@
       <option value="success">Success</option>
       <option value="retry">Retryable failure</option>
       <option value="dead">Non-retryable failure</option>
-      <option value="msg">Read msg.outboxOutcome</option>
     </select>
   </div>
 </script>
@@ -472,12 +471,15 @@
     <code>stale_lease</code>.
   </p>
   <p>
-    In <code>msg</code> outcome mode, set <code>msg.outboxRetryable</code> to <code>true</code>
-    to retry or <code>false</code> to dead-letter. The circuit breaker and failure class are
-    derived automatically: retryable failures trip the circuit with class
-    <code>infrastructure</code>, non-retryable ones do not with class <code>data</code>. Advanced
-    users can override these with <code>msg.outboxCircuitFailure</code>,
-    <code>msg.outboxFailureClass</code>, and <code>msg.outboxError</code>.
+    The configured outcome is the default.
+    <code>msg.outboxOutcome === "success"</code> and
+    <code>msg.outboxRetryable</code> always override it, so a single settle
+    node set to <code>Success</code> can also handle failure wires — just set
+    <code>msg.outboxRetryable</code>: <code>true</code> to retry or
+    <code>false</code> to dead-letter. The circuit breaker and failure class
+    are derived automatically. Set <code>msg.outboxCircuitFailure</code>,
+    <code>msg.outboxFailureClass</code>, or <code>msg.outboxError</code> to
+    override.
   </p>
   <p>
     The node also accepts batch claims in <code>msg.outboxBatch</code>. Every lease is settled,

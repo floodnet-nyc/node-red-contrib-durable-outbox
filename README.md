@@ -20,9 +20,9 @@ Install the module and create three configuration nodes, then wire four nodes:
 1. **`durable-outbox-config`** — Set the database path, e.g. `/data/outbox/outbox.sqlite`.
 2. **`outbox-sink-config`** — Point to the config above, set a `Sink key` (e.g. `postgres-primary`), enable `retry-until-expired` for idempotent sinks.
 3. **`outbox-enqueue`** — Select the sink config. Wire your data source into the input.
-4. **`outbox-claim`** — Select the same sink. Feed it a repeating Inject node (e.g. every 5s).
-5. **`outbox-settle`** — Select the same sink, set `Outcome: Success`. Wire the claim output through your delivery node (e.g. a PostgreSQL upsert), then into settle.
-6. On failure: add a Catch node scoped to your delivery node, wire through a Function node that sets `msg.outboxRetryable = true`, then into a second `outbox-settle (msg mode)`. The circuit breaker and failure class are derived automatically.
+4. **`outbox-claim`** — Select the same sink. Feed it a repeating Inject node (e.g. every 5s). Wire through your delivery node (e.g. a PostgreSQL upsert).
+5. **`outbox-settle`** — Select the same sink, set `Outcome: Success`. Wire the claim output (after your delivery node) into the settle input. The success path needs no message properties.
+6. On failure: add a Catch node scoped to your delivery node, wire through a Function node that sets `msg.outboxRetryable = true`, then into the same settle node. One settle node in `Success` mode handles both paths — the message property overrides the dropdown.
 
 That's it. See the [demo flows](#docker-compose-postgresql-demo) below for a complete working example with failure classification and control operations.
 
@@ -142,18 +142,19 @@ again after the cooldown, and a successful delivery closes the circuit.
 
 Settles `msg.outbox.id` using the selected sink config. A message whose durable
 sink key does not match that config is rejected. Configure separate instances
-for success, retryable failure, or non-retryable failure. The dynamic mode
-reads:
+for success, retryable failure, or non-retryable failure. The configured
+outcome is the default, and <code>msg.outboxOutcome</code> /
+<code>msg.outboxRetryable</code> always override it:
 
 ```js
-msg.outboxOutcome = "success";           // deliver the job
-msg.outboxRetryable = true;              // retry with backoff (primary property)
+msg.outboxRetryable = true;              // retry with backoff (overrides dropdown)
 ```
 
-Set only <code>msg.outboxRetryable</code>. The circuit breaker and failure class
-are derived automatically: retryable failures trip the circuit with class
-<code>infrastructure</code>; non-retryable ones don't with class
-<code>data</code>. Advanced users can override with
+A settle node set to <code>Success</code> handles both paths: the success
+wire needs no extra properties; the failure wire only needs
+<code>msg.outboxRetryable</code>. Set <code>msg.outboxOutcome</code> to
+<code>"success"</code> to force delivery regardless of the dropdown. Advanced
+users can override the derived circuit and failure class with
 <code>msg.outboxCircuitFailure</code>, <code>msg.outboxFailureClass</code>,
 <code>msg.outboxError</code>, and <code>msg.outboxStatus</code>.
 

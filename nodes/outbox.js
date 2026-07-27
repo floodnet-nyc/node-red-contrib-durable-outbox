@@ -264,16 +264,19 @@ module.exports = function registerOutboxNodes(RED) {
     const configuredOutcome = config.outcome || "success";
 
     function resolveOutcome(msg) {
-      const success = configuredOutcome === "success"
-        || (configuredOutcome === "msg" && msg.outboxOutcome === "success");
-
+      let success;
       let retryable;
-      if (configuredOutcome === "retry") {
-        retryable = true;
-      } else if (configuredOutcome === "dead") {
-        retryable = false;
+
+      if (msg.outboxOutcome === "success") {
+        success = true;
+      } else if (msg.outboxRetryable != null) {
+        success = false;
+        retryable = msg.outboxRetryable;
+      } else if (configuredOutcome === "success") {
+        success = true;
       } else {
-        retryable = msg.outboxRetryable !== false;
+        success = false;
+        retryable = configuredOutcome === "retry";
       }
 
       const error =

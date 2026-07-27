@@ -131,6 +131,37 @@
     inputs: 1,
     outputs: 1,
     icon: "font-awesome/fa-sliders",
+    oneditprepare: function () {
+      const updateFieldVisibility = function () {
+        const action = $("#node-input-action").val();
+        const dynamic = action === "msg";
+        const deadLetterBulkAction = [
+          "list-dead",
+          "requeue-dead",
+          "delete-dead"
+        ].includes(action);
+
+        $(".outbox-control-failure-class-row").toggle(
+          dynamic || deadLetterBulkAction
+        );
+        $(".outbox-control-limit-row").toggle(
+          dynamic || deadLetterBulkAction || action === "purge-delivered"
+        );
+        $(".outbox-control-older-than-row").toggle(
+          dynamic || action === "purge-delivered"
+        );
+      };
+
+      $("#node-input-action")
+        .on("change.outboxControl", updateFieldVisibility);
+      updateFieldVisibility();
+    },
+    oneditsave: function () {
+      $("#node-input-action").off(".outboxControl");
+    },
+    oneditcancel: function () {
+      $("#node-input-action").off(".outboxControl");
+    },
     label: function () {
       return this.name || `outbox ${this.action || "control"}`;
     }
@@ -296,16 +327,16 @@
     <label for="node-input-sink">Sink</label>
     <input type="text" id="node-input-sink">
   </div>
-  <div class="form-row">
+  <div class="form-row outbox-control-failure-class-row">
     <label for="node-input-failureClass">Failure class</label>
     <input type="text" id="node-input-failureClass"
       placeholder="infrastructure or data">
   </div>
-  <div class="form-row">
+  <div class="form-row outbox-control-limit-row">
     <label for="node-input-limit">Limit</label>
     <input type="number" id="node-input-limit">
   </div>
-  <div class="form-row">
+  <div class="form-row outbox-control-older-than-row">
     <label for="node-input-olderThanMs">Delivered age (ms)</label>
     <input type="number" id="node-input-olderThanMs">
   </div>

@@ -40,7 +40,7 @@ test("migrates databases created by the original schema", (t) => {
   legacy.exec(`
     CREATE TABLE outbox_jobs (
       id TEXT PRIMARY KEY, dedupe_key TEXT UNIQUE, sink TEXT,
-      schema_version INTEGER, payload_json TEXT, state TEXT,
+      payload_json TEXT, state TEXT,
       attempts INTEGER, max_attempts INTEGER, max_age_ms INTEGER,
       base_delay_ms INTEGER, max_delay_ms INTEGER, available_at INTEGER,
       lease_until INTEGER, first_error TEXT, last_error TEXT,
@@ -48,7 +48,7 @@ test("migrates databases created by the original schema", (t) => {
     );
     CREATE TABLE dead_letter_jobs (
       id TEXT PRIMARY KEY, dedupe_key TEXT, sink TEXT,
-      schema_version INTEGER, payload_json TEXT, attempts INTEGER,
+      payload_json TEXT, attempts INTEGER,
       max_attempts INTEGER, max_age_ms INTEGER, base_delay_ms INTEGER,
       max_delay_ms INTEGER, first_error TEXT, last_error TEXT,
       last_status INTEGER, created_at INTEGER, failed_at INTEGER

@@ -424,8 +424,7 @@
   <p>Atomically persists one job from the configured payload property.</p>
   <p>
     By default, the persisted payload is <code>msg.payload</code>. Optional job metadata comes
-    from <code>msg.outbox</code>, including <code>dedupeKey</code>,
-    <code>schemaVersion</code>, or retry overrides. The outbox, stable sink key, and retry
+    from <code>msg.outbox</code>, including <code>dedupeKey</code> or retry overrides. The outbox, stable sink key, and retry
     defaults come from the sink config. A different sink value is rejected.
   </p>
   <p>

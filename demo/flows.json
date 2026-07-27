@@ -7,6 +7,14 @@
         "info": "Generated readings are committed to SQLite before a worker attempts PostgreSQL delivery."
     },
     {
+        "id": "f9d60f4c68faa702",
+        "type": "tab",
+        "label": "Batch outbox",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
         "id": "84ef9b0fd4902c58",
         "type": "group",
         "z": "demo-flow",
@@ -22,8 +30,8 @@
             "settle-success",
             "delivered-debug"
         ],
-        "x": 34,
-        "y": 319,
+        "x": 54,
+        "y": 199,
         "w": 992,
         "h": 82
     },
@@ -42,8 +50,8 @@
             "retry-debug",
             "dead-debug"
         ],
-        "x": 34,
-        "y": 479,
+        "x": 54,
+        "y": 299,
         "w": 1052,
         "h": 82
     },
@@ -57,13 +65,106 @@
         },
         "nodes": [
             "enqueue-postgres",
-            "generated-debug",
             "queued-debug"
         ],
-        "x": 604,
-        "y": 59,
+        "x": 554,
+        "y": 99,
         "w": 492,
-        "h": 122
+        "h": 82
+    },
+    {
+        "id": "790f4619bca6adf1",
+        "type": "group",
+        "z": "demo-flow",
+        "name": "Data Generation",
+        "style": {
+            "label": true
+        },
+        "nodes": [
+            "generate-reading",
+            "build-outbox-job"
+        ],
+        "x": 54,
+        "y": 99,
+        "w": 482,
+        "h": 82
+    },
+    {
+        "id": "d1db51ee627713f8",
+        "type": "group",
+        "z": "f9d60f4c68faa702",
+        "name": "Insert",
+        "style": {
+            "label": true
+        },
+        "nodes": [
+            "6c71a82d60ab3edd",
+            "0b62e68fa4580800",
+            "84b70f32fa160c6e",
+            "89377ce555965f22",
+            "6e27a6c9ede9e8b8",
+            "64490057068d8517",
+            "80f356eeffe86fca",
+            "34cd0a4a977f965e"
+        ],
+        "x": 54,
+        "y": 219,
+        "w": 1092,
+        "h": 82
+    },
+    {
+        "id": "bd059afaef9221ff",
+        "type": "group",
+        "z": "f9d60f4c68faa702",
+        "name": "Retry",
+        "style": {
+            "label": true
+        },
+        "nodes": [
+            "49135bf8bd191fb8",
+            "b7dc8125b7065c8b",
+            "330eb9a978225548",
+            "d1d87d3262c71179",
+            "510127e721507621"
+        ],
+        "x": 54,
+        "y": 319,
+        "w": 1052,
+        "h": 82
+    },
+    {
+        "id": "a94e9ddb6864cdd7",
+        "type": "group",
+        "z": "f9d60f4c68faa702",
+        "name": "Queue",
+        "style": {
+            "label": true
+        },
+        "nodes": [
+            "aa454e7d4c6c1737",
+            "e489f96705b9518f"
+        ],
+        "x": 554,
+        "y": 119,
+        "w": 362,
+        "h": 82
+    },
+    {
+        "id": "c47e7204be547f17",
+        "type": "group",
+        "z": "f9d60f4c68faa702",
+        "name": "Data Generation",
+        "style": {
+            "label": true
+        },
+        "nodes": [
+            "5d928b57c02e7808",
+            "62ecc364f0c3f682"
+        ],
+        "x": 54,
+        "y": 119,
+        "w": 482,
+        "h": 82
     },
     {
         "id": "outbox-config",
@@ -137,9 +238,28 @@
         "circuitBreakerCooldownMs": 30000
     },
     {
+        "id": "7cb28bdf3de0af1d",
+        "type": "outbox-sink-config",
+        "name": "",
+        "outbox": "outbox-config",
+        "sinkKey": "postgres-batch",
+        "leaseMs": 60000,
+        "maxInFlight": 1,
+        "batchSize": 10,
+        "maxAttempts": 10,
+        "retryUntilExpired": "false",
+        "maxAgeMs": 86400000,
+        "baseDelayMs": 2000,
+        "maxDelayMs": 300000,
+        "circuitBreakerEnabled": true,
+        "circuitBreakerThreshold": 3,
+        "circuitBreakerCooldownMs": 30000
+    },
+    {
         "id": "generate-reading",
         "type": "inject",
         "z": "demo-flow",
+        "g": "790f4619bca6adf1",
         "name": "Generate reading every 2s",
         "props": [],
         "repeat": "2",
@@ -147,7 +267,7 @@
         "once": true,
         "onceDelay": "1",
         "topic": "",
-        "x": 200,
+        "x": 220,
         "y": 140,
         "wires": [
             [
@@ -159,7 +279,8 @@
         "id": "build-outbox-job",
         "type": "function",
         "z": "demo-flow",
-        "name": "Build durable PostgreSQL job",
+        "g": "790f4619bca6adf1",
+        "name": "Generate Data",
         "func": "const observedAt = new Date();\nconst sequence = context.get('sequence') || 0;\ncontext.set('sequence', sequence + 1);\nconst reading = {\n    device_id: 'demo-sensor-1',\n    observed_at: observedAt.toISOString(),\n    value_mm: 100 + (sequence % 50)\n};\nmsg.payload = reading;\nmsg.outboxJob = {\n    dedupeKey: `reading:${reading.device_id}:${reading.observed_at}`\n};\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
@@ -167,7 +288,7 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 460,
+        "x": 430,
         "y": 140,
         "wires": [
             [
@@ -185,7 +306,7 @@
         "sink": "postgres-outbox-sink",
         "payloadProperty": "payload",
         "optionsProperty": "outboxJob",
-        "x": 740,
+        "x": 690,
         "y": 140,
         "wires": [
             [
@@ -197,7 +318,6 @@
         "id": "generated-debug",
         "type": "debug",
         "z": "demo-flow",
-        "g": "98dca9bfb2f1a4d6",
         "name": "Generated",
         "active": false,
         "tosidebar": true,
@@ -207,8 +327,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 950,
-        "y": 100,
+        "x": 650,
+        "y": 80,
         "wires": []
     },
     {
@@ -225,7 +345,7 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 970,
+        "x": 920,
         "y": 140,
         "wires": []
     },
@@ -241,8 +361,8 @@
         "once": true,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 130,
-        "y": 360,
+        "x": 150,
+        "y": 240,
         "wires": [
             [
                 "claim-postgres"
@@ -256,8 +376,8 @@
         "g": "84ef9b0fd4902c58",
         "name": "Lease PostgreSQL work",
         "sink": "postgres-outbox-sink",
-        "x": 310,
-        "y": 360,
+        "x": 330,
+        "y": 240,
         "wires": [
             [
                 "prepare-postgres-query"
@@ -277,8 +397,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 490,
-        "y": 360,
+        "x": 510,
+        "y": 240,
         "wires": [
             [
                 "postgres-upsert"
@@ -296,8 +416,8 @@
         "split": false,
         "rowsPerMsg": 1,
         "outputs": 1,
-        "x": 620,
-        "y": 360,
+        "x": 640,
+        "y": 240,
         "wires": [
             [
                 "settle-success"
@@ -312,8 +432,8 @@
         "name": "",
         "sink": "postgres-outbox-sink",
         "outcome": "success",
-        "x": 715,
-        "y": 360,
+        "x": 735,
+        "y": 240,
         "wires": [
             [
                 "delivered-debug"
@@ -332,8 +452,8 @@
             "postgres-upsert"
         ],
         "uncaught": false,
-        "x": 150,
-        "y": 520,
+        "x": 170,
+        "y": 340,
         "wires": [
             [
                 "classify-postgres"
@@ -353,8 +473,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 380,
-        "y": 520,
+        "x": 400,
+        "y": 340,
         "wires": [
             [
                 "settle-failure"
@@ -369,8 +489,8 @@
         "name": "Retry or dead-letter",
         "sink": "postgres-outbox-sink",
         "outcome": "msg",
-        "x": 610,
-        "y": 520,
+        "x": 630,
+        "y": 340,
         "wires": [
             [
                 "retry-debug"
@@ -394,8 +514,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 880,
-        "y": 360,
+        "x": 900,
+        "y": 240,
         "wires": []
     },
     {
@@ -412,8 +532,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 800,
-        "y": 520,
+        "x": 820,
+        "y": 340,
         "wires": []
     },
     {
@@ -430,8 +550,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 970,
-        "y": 520,
+        "x": 990,
+        "y": 340,
         "wires": []
     },
     {
@@ -445,8 +565,8 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 300,
-        "y": 640,
+        "x": 260,
+        "y": 500,
         "wires": [
             [
                 "status-control"
@@ -463,8 +583,8 @@
         "failureClass": "",
         "limit": 100,
         "olderThanMs": "",
-        "x": 500,
-        "y": 640,
+        "x": 460,
+        "y": 500,
         "wires": [
             [
                 "control-debug"
@@ -482,8 +602,8 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 300,
-        "y": 700,
+        "x": 260,
+        "y": 560,
         "wires": [
             [
                 "resume-control"
@@ -500,8 +620,8 @@
         "failureClass": "",
         "limit": 100,
         "olderThanMs": "",
-        "x": 550,
-        "y": 700,
+        "x": 510,
+        "y": 560,
         "wires": [
             [
                 "control-debug"
@@ -519,8 +639,8 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 280,
-        "y": 760,
+        "x": 240,
+        "y": 620,
         "wires": [
             [
                 "requeue-dead-control"
@@ -537,8 +657,8 @@
         "failureClass": "infrastructure",
         "limit": 1000,
         "olderThanMs": "",
-        "x": 560,
-        "y": 760,
+        "x": 520,
+        "y": 620,
         "wires": [
             [
                 "control-debug"
@@ -558,8 +678,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 880,
-        "y": 700,
+        "x": 840,
+        "y": 560,
         "wires": []
     },
     {
@@ -568,14 +688,15 @@
         "z": "demo-flow",
         "name": "Stop PostgreSQL: docker compose stop postgres. Jobs remain in SQLite and drain after restart.",
         "info": "",
-        "x": 520,
-        "y": 840,
+        "x": 480,
+        "y": 700,
         "wires": []
     },
     {
-        "id": "6a4743f792aacfab",
+        "id": "64490057068d8517",
         "type": "batch",
-        "z": "demo-flow",
+        "z": "f9d60f4c68faa702",
+        "g": "d1db51ee627713f8",
         "name": "",
         "mode": "interval",
         "count": 10,
@@ -584,18 +705,19 @@
         "allowEmptySequence": false,
         "honourParts": false,
         "topics": [],
-        "x": 720,
-        "y": 220,
+        "x": 520,
+        "y": 260,
         "wires": [
             [
-                "930c15265bef8f9e"
+                "80f356eeffe86fca"
             ]
         ]
     },
     {
-        "id": "930c15265bef8f9e",
+        "id": "80f356eeffe86fca",
         "type": "join",
-        "z": "demo-flow",
+        "z": "f9d60f4c68faa702",
+        "g": "d1db51ee627713f8",
         "name": "",
         "mode": "auto",
         "build": "object",
@@ -613,18 +735,19 @@
         "reduceInit": "",
         "reduceInitType": "",
         "reduceFixup": "",
-        "x": 850,
-        "y": 220,
+        "x": 650,
+        "y": 260,
         "wires": [
             [
-                "7491264d922b33af"
+                "34cd0a4a977f965e"
             ]
         ]
     },
     {
-        "id": "7491264d922b33af",
+        "id": "34cd0a4a977f965e",
         "type": "function",
-        "z": "demo-flow",
+        "z": "f9d60f4c68faa702",
+        "g": "d1db51ee627713f8",
         "name": "query",
         "func": "const readings = msg.payload;\nmsg.params = [\n    readings.map(d => d.device_id),\n    readings.map(d => d.observed_at),\n    readings.map(d => d.value_mm),\n];\nreturn msg;",
         "outputs": 1,
@@ -633,28 +756,412 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 730,
+        "x": 770,
         "y": 260,
         "wires": [
             [
-                "07f5a69c1142c452"
+                "6e27a6c9ede9e8b8"
             ]
         ]
     },
     {
-        "id": "07f5a69c1142c452",
+        "id": "6e27a6c9ede9e8b8",
         "type": "postgresql",
-        "z": "demo-flow",
+        "z": "f9d60f4c68faa702",
+        "g": "d1db51ee627713f8",
         "name": "Batch UPSERT",
-        "query": "INSERT INTO sensor_readings (device_id, observed_at, value_mm)\n  SELECT * \n  FROM unnest(\n    $1::text[], \n    $2::timestamptz[], \n    $3::float8[],\n  )\nON CONFLICT (device_id, observed_at)\nDO UPDATE SET value_mm = EXCLUDED.value_mm\nRETURNING *",
+        "query": "INSERT INTO sensor_readings (device_id, observed_at, value_mm)\n  SELECT * \n  FROM unnest(\n    $1::text[], \n    $2::timestamptz[], \n    $3::float8[]\n  )\nON CONFLICT (device_id, observed_at)\nDO UPDATE SET value_mm = EXCLUDED.value_mm\nRETURNING *",
         "postgreSQLConfig": "postgres-config",
         "split": false,
         "rowsPerMsg": 1,
         "outputs": 1,
-        "x": 880,
+        "x": 920,
         "y": 260,
         "wires": [
-            []
+            [
+                "84b70f32fa160c6e"
+            ]
         ]
+    },
+    {
+        "id": "6c71a82d60ab3edd",
+        "type": "inject",
+        "z": "f9d60f4c68faa702",
+        "g": "d1db51ee627713f8",
+        "name": "poll",
+        "props": [],
+        "repeat": "5",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 150,
+        "y": 260,
+        "wires": [
+            [
+                "0b62e68fa4580800"
+            ]
+        ]
+    },
+    {
+        "id": "0b62e68fa4580800",
+        "type": "outbox-claim",
+        "z": "f9d60f4c68faa702",
+        "g": "d1db51ee627713f8",
+        "name": "Lease PostgreSQL work",
+        "sink": "7cb28bdf3de0af1d",
+        "x": 330,
+        "y": 260,
+        "wires": [
+            [
+                "64490057068d8517"
+            ]
+        ]
+    },
+    {
+        "id": "84b70f32fa160c6e",
+        "type": "outbox-settle",
+        "z": "f9d60f4c68faa702",
+        "g": "d1db51ee627713f8",
+        "name": "",
+        "sink": "postgres-outbox-sink",
+        "outcome": "success",
+        "x": 1035,
+        "y": 260,
+        "wires": [
+            [
+                "89377ce555965f22"
+            ],
+            []
+        ],
+        "l": false
+    },
+    {
+        "id": "89377ce555965f22",
+        "type": "debug",
+        "z": "f9d60f4c68faa702",
+        "g": "d1db51ee627713f8",
+        "name": "PostgreSQL delivered",
+        "active": false,
+        "tosidebar": false,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 1085,
+        "y": 260,
+        "wires": [],
+        "l": false
+    },
+    {
+        "id": "49135bf8bd191fb8",
+        "type": "catch",
+        "z": "f9d60f4c68faa702",
+        "g": "bd059afaef9221ff",
+        "name": "PostgreSQL failure",
+        "scope": [
+            "d524267ddb4750ef"
+        ],
+        "uncaught": false,
+        "x": 170,
+        "y": 360,
+        "wires": [
+            [
+                "b7dc8125b7065c8b"
+            ]
+        ]
+    },
+    {
+        "id": "b7dc8125b7065c8b",
+        "type": "function",
+        "z": "f9d60f4c68faa702",
+        "g": "bd059afaef9221ff",
+        "name": "Classify PostgreSQL failure",
+        "func": "const permanentCodes = new Set([\n    '22001', '22003', '22P02',\n    '23502', '23503', '23505', '23514',\n    '42601', '42703', '42P01'\n]);\nconst code = msg.error?.code;\nconst permanent = permanentCodes.has(code);\nmsg.outboxOutcome = 'failure';\nmsg.outboxRetryable = !permanent;\nmsg.outboxCircuitFailure = !permanent;\nmsg.outboxFailureClass = permanent ? 'data' : 'postgres-connectivity';\nmsg.outboxError = msg.error || `PostgreSQL delivery failed (${code || 'unknown'})`;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 360,
+        "wires": [
+            [
+                "330eb9a978225548"
+            ]
+        ]
+    },
+    {
+        "id": "330eb9a978225548",
+        "type": "outbox-settle",
+        "z": "f9d60f4c68faa702",
+        "g": "bd059afaef9221ff",
+        "name": "Retry or dead-letter",
+        "sink": "7cb28bdf3de0af1d",
+        "outcome": "msg",
+        "x": 630,
+        "y": 360,
+        "wires": [
+            [
+                "d1d87d3262c71179"
+            ],
+            [
+                "510127e721507621"
+            ]
+        ]
+    },
+    {
+        "id": "d1d87d3262c71179",
+        "type": "debug",
+        "z": "f9d60f4c68faa702",
+        "g": "bd059afaef9221ff",
+        "name": "Retry scheduled",
+        "active": false,
+        "tosidebar": false,
+        "console": false,
+        "tostatus": true,
+        "complete": "outboxSettlement",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 820,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "510127e721507621",
+        "type": "debug",
+        "z": "f9d60f4c68faa702",
+        "g": "bd059afaef9221ff",
+        "name": "Dead letter",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "outboxSettlement",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 990,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "aa454e7d4c6c1737",
+        "type": "outbox-enqueue",
+        "z": "f9d60f4c68faa702",
+        "g": "a94e9ddb6864cdd7",
+        "name": "Commit to local outbox",
+        "sink": "7cb28bdf3de0af1d",
+        "payloadProperty": "payload",
+        "optionsProperty": "outboxJob",
+        "x": 690,
+        "y": 160,
+        "wires": [
+            [
+                "e489f96705b9518f"
+            ]
+        ]
+    },
+    {
+        "id": "e489f96705b9518f",
+        "type": "debug",
+        "z": "f9d60f4c68faa702",
+        "g": "a94e9ddb6864cdd7",
+        "name": "Durably queued",
+        "active": false,
+        "tosidebar": false,
+        "console": false,
+        "tostatus": true,
+        "complete": "outboxEnqueue",
+        "targetType": "msg",
+        "statusVal": "outboxEnqueue",
+        "statusType": "auto",
+        "x": 855,
+        "y": 160,
+        "wires": [],
+        "l": false
+    },
+    {
+        "id": "5d928b57c02e7808",
+        "type": "inject",
+        "z": "f9d60f4c68faa702",
+        "g": "c47e7204be547f17",
+        "name": "Generate reading every 2s",
+        "props": [],
+        "repeat": "2",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "1",
+        "topic": "",
+        "x": 220,
+        "y": 160,
+        "wires": [
+            [
+                "62ecc364f0c3f682"
+            ]
+        ]
+    },
+    {
+        "id": "62ecc364f0c3f682",
+        "type": "function",
+        "z": "f9d60f4c68faa702",
+        "g": "c47e7204be547f17",
+        "name": "Generate Data",
+        "func": "const observedAt = new Date();\nconst sequence = context.get('sequence') || 0;\ncontext.set('sequence', sequence + 1);\nconst reading = {\n    device_id: 'demo-sensor-1',\n    observed_at: observedAt.toISOString(),\n    value_mm: 100 + (sequence % 50)\n};\nmsg.payload = reading;\nmsg.outboxJob = {\n    dedupeKey: `reading:${reading.device_id}:${reading.observed_at}`\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 430,
+        "y": 160,
+        "wires": [
+            [
+                "aa454e7d4c6c1737"
+            ]
+        ]
+    },
+    {
+        "id": "34e124e9cd92119d",
+        "type": "inject",
+        "z": "f9d60f4c68faa702",
+        "name": "Inspect outbox status",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 220,
+        "y": 480,
+        "wires": [
+            [
+                "d4054922d4212c5f"
+            ]
+        ]
+    },
+    {
+        "id": "d4054922d4212c5f",
+        "type": "outbox-control",
+        "z": "f9d60f4c68faa702",
+        "name": "Outbox status",
+        "action": "status",
+        "sink": "7cb28bdf3de0af1d",
+        "failureClass": "",
+        "limit": 100,
+        "olderThanMs": "",
+        "x": 420,
+        "y": 480,
+        "wires": [
+            [
+                "0a97e593c25e3942"
+            ]
+        ]
+    },
+    {
+        "id": "7e53699909b4e8cd",
+        "type": "inject",
+        "z": "f9d60f4c68faa702",
+        "name": "PostgreSQL recovered",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 220,
+        "y": 540,
+        "wires": [
+            [
+                "b5cfbed1de780d95"
+            ]
+        ]
+    },
+    {
+        "id": "b5cfbed1de780d95",
+        "type": "outbox-control",
+        "z": "f9d60f4c68faa702",
+        "name": "Resume and drain PostgreSQL",
+        "action": "resume",
+        "sink": "7cb28bdf3de0af1d",
+        "failureClass": "",
+        "limit": 100,
+        "olderThanMs": "",
+        "x": 470,
+        "y": 540,
+        "wires": [
+            [
+                "0a97e593c25e3942"
+            ]
+        ]
+    },
+    {
+        "id": "570d92e2bbeb7fde",
+        "type": "inject",
+        "z": "f9d60f4c68faa702",
+        "name": "Recover expired outage jobs",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 200,
+        "y": 600,
+        "wires": [
+            [
+                "409c6d7c1166c3ad"
+            ]
+        ]
+    },
+    {
+        "id": "409c6d7c1166c3ad",
+        "type": "outbox-control",
+        "z": "f9d60f4c68faa702",
+        "name": "Requeue infrastructure dead letters",
+        "action": "requeue-dead",
+        "sink": "7cb28bdf3de0af1d",
+        "failureClass": "infrastructure",
+        "limit": 1000,
+        "olderThanMs": "",
+        "x": 480,
+        "y": 600,
+        "wires": [
+            [
+                "0a97e593c25e3942"
+            ]
+        ]
+    },
+    {
+        "id": "0a97e593c25e3942",
+        "type": "debug",
+        "z": "f9d60f4c68faa702",
+        "name": "Outbox control result",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "outboxControl",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 800,
+        "y": 540,
+        "wires": []
+    },
+    {
+        "id": "3af7b8d67d4429ba",
+        "type": "comment",
+        "z": "f9d60f4c68faa702",
+        "name": "Stop PostgreSQL: docker compose stop postgres. Jobs remain in SQLite and drain after restart.",
+        "info": "",
+        "x": 440,
+        "y": 680,
+        "wires": []
     }
 ]

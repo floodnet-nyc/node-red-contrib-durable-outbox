@@ -1,6 +1,7 @@
 "use strict";
 
 const { OutboxStore } = require("../lib/outbox-store");
+const D = require("../lib/defaults");
 
 module.exports = function registerOutboxNodes(RED) {
   function megabytesToBytes(value, fallbackMb) {
@@ -59,26 +60,26 @@ module.exports = function registerOutboxNodes(RED) {
     this.outboxConfig = outboxConfig;
     this.store = outboxConfig.store;
     this.sinkKey = sinkKey;
-    this.leaseMs = positiveNumber(config.leaseMs, 60_000);
-    this.maxInFlight = positiveNumber(config.maxInFlight, 1);
-    this.batchSize = positiveNumber(config.batchSize, 10);
-    this.maxAttempts = positiveNumber(config.maxAttempts, 10);
+    this.leaseMs = positiveNumber(config.leaseMs, D.LEASE_MS);
+    this.maxInFlight = positiveNumber(config.maxInFlight, D.MAX_IN_FLIGHT);
+    this.batchSize = positiveNumber(config.batchSize, D.BATCH_SIZE);
+    this.maxAttempts = positiveNumber(config.maxAttempts, D.MAX_ATTEMPTS);
     this.retryUntilExpired =
       config.retryUntilExpired === true ||
       config.retryUntilExpired === "true";
-    this.maxAgeMs = positiveNumber(config.maxAgeMs, 86_400_000);
-    this.baseDelayMs = positiveNumber(config.baseDelayMs, 2_000);
-    this.maxDelayMs = positiveNumber(config.maxDelayMs, 300_000);
+    this.maxAgeMs = positiveNumber(config.maxAgeMs, D.MAX_AGE_MS);
+    this.baseDelayMs = positiveNumber(config.baseDelayMs, D.BASE_DELAY_MS);
+    this.maxDelayMs = positiveNumber(config.maxDelayMs, D.MAX_DELAY_MS);
     this.circuitBreakerEnabled =
       config.circuitBreakerEnabled !== false &&
       config.circuitBreakerEnabled !== "false";
     this.circuitBreakerThreshold = positiveNumber(
       config.circuitBreakerThreshold,
-      3
+      D.CIRCUIT_THRESHOLD
     );
     this.circuitBreakerCooldownMs = positiveNumber(
       config.circuitBreakerCooldownMs,
-      30_000
+      D.CIRCUIT_COOLDOWN_MS
     );
     const queueDepthListeners = new Set();
     this.subscribeQueueDepth = (listener) => {
@@ -476,11 +477,11 @@ module.exports = function registerOutboxNodes(RED) {
           msg.failureClass || config.failureClass || undefined;
         const limit = Number(msg.limit ?? config.limit) || 100;
         const requestedAge = Number(
-          msg.olderThanMs ?? config.olderThanMs ?? 86_400_000
+          msg.olderThanMs ?? config.olderThanMs ?? D.MAX_AGE_MS
         );
         const olderThanMs = Number.isFinite(requestedAge)
           ? requestedAge
-          : 86_400_000;
+          : D.MAX_AGE_MS;
         const id = msg.deadLetterId || msg.outbox?.id || msg.id;
         let result;
 

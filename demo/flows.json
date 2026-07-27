@@ -161,9 +161,9 @@
             "5d928b57c02e7808",
             "62ecc364f0c3f682"
         ],
-        "x": 54,
+        "x": 14,
         "y": 119,
-        "w": 482,
+        "w": 522,
         "h": 82
     },
     {
@@ -244,8 +244,8 @@
         "outbox": "outbox-config",
         "sinkKey": "postgres-batch",
         "leaseMs": 60000,
-        "maxInFlight": 1,
-        "batchSize": 10,
+        "maxInFlight": "24",
+        "batchSize": "12",
         "maxAttempts": 10,
         "retryUntilExpired": "false",
         "maxAgeMs": 86400000,
@@ -701,7 +701,7 @@
         "mode": "interval",
         "count": 10,
         "overlap": 0,
-        "interval": "8",
+        "interval": "4",
         "allowEmptySequence": false,
         "honourParts": false,
         "topics": [],
@@ -790,7 +790,7 @@
         "g": "d1db51ee627713f8",
         "name": "poll",
         "props": [],
-        "repeat": "5",
+        "repeat": "2",
         "crontab": "",
         "once": true,
         "onceDelay": 0.1,
@@ -846,7 +846,7 @@
         "tosidebar": false,
         "console": false,
         "tostatus": true,
-        "complete": "payload",
+        "complete": "payload[0].observed_at",
         "targetType": "msg",
         "statusVal": "payload",
         "statusType": "auto",
@@ -997,7 +997,7 @@
         "once": true,
         "onceDelay": "1",
         "topic": "",
-        "x": 220,
+        "x": 180,
         "y": 160,
         "wires": [
             [
@@ -1155,13 +1155,77 @@
         "wires": []
     },
     {
-        "id": "3af7b8d67d4429ba",
-        "type": "comment",
+        "id": "11172d414de4d2fa",
+        "type": "inject",
         "z": "f9d60f4c68faa702",
-        "name": "Stop PostgreSQL: docker compose stop postgres. Jobs remain in SQLite and drain after restart.",
-        "info": "",
-        "x": 440,
-        "y": 680,
-        "wires": []
+        "name": "",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 230,
+        "y": 760,
+        "wires": [
+            [
+                "fd31e236efcaea66"
+            ]
+        ]
+    },
+    {
+        "id": "fd31e236efcaea66",
+        "type": "outbox-control",
+        "z": "f9d60f4c68faa702",
+        "name": "",
+        "action": "retry-now",
+        "sink": "7cb28bdf3de0af1d",
+        "failureClass": "",
+        "limit": 100,
+        "olderThanMs": "",
+        "x": 490,
+        "y": 760,
+        "wires": [
+            [
+                "0a97e593c25e3942"
+            ]
+        ]
+    },
+    {
+        "id": "2cb4b609c5e95052",
+        "type": "inject",
+        "z": "f9d60f4c68faa702",
+        "name": "",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 230,
+        "y": 840,
+        "wires": [
+            [
+                "12a8e8fccc6fbfdb"
+            ]
+        ]
+    },
+    {
+        "id": "12a8e8fccc6fbfdb",
+        "type": "outbox-control",
+        "z": "f9d60f4c68faa702",
+        "name": "",
+        "action": "resume",
+        "sink": "7cb28bdf3de0af1d",
+        "failureClass": "",
+        "limit": 100,
+        "olderThanMs": "",
+        "x": 480,
+        "y": 840,
+        "wires": [
+            [
+                "0a97e593c25e3942"
+            ]
+        ]
     }
 ]

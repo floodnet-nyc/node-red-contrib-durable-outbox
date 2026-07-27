@@ -5,4 +5,9 @@ node_modules/
 npm-debug.log*
 shh*/
 .shh*/
+demo/.config.*.json
+demo/.config.*.json.backup
+demo/.flows*.backup
+demo/flows_cred.json
+demo/package.json
 /data/

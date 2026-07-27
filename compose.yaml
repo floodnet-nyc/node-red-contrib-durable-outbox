@@ -30,7 +30,10 @@ services:
       postgres:
         condition: service_healthy
     volumes:
+      - node-red-data:/data
       - ./data/outbox:/data/outbox
-      - ./demo/flows.json:/data/flows.json
     ports:
       - "1880:1880"
+
+volumes:
+  node-red-data:

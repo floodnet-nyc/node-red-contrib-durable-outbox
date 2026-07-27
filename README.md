@@ -164,6 +164,18 @@ acknowledges it only after the upsert succeeds. Delivery uses
 `node-red-contrib-postgresql` 0.15.4 with an environment-configured connection
 pool and a parameterized `msg.query` / `msg.params` upsert.
 
+Node-RED editor state is stored in the Compose-managed `node-red-data` volume,
+so Deploy can atomically replace `flows.json` and changes survive container
+restarts. The SQLite outbox remains separately persisted in
+`./data/outbox`. To discard editor changes and restore the packaged demo flow,
+remove only the `node-red-data` volume and recreate the service:
+
+```sh
+docker compose down
+docker volume rm floodnet-ingest-queue_node-red-data
+docker compose up --build
+```
+
 Inspect delivered rows:
 
 ```sh

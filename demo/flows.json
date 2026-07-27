@@ -12,7 +12,11 @@
     "name": "Demo outbox",
     "filename": "/data/outbox/outbox.sqlite",
     "circuitBreakerThreshold": 3,
-    "circuitBreakerCooldownMs": 30000
+    "circuitBreakerCooldownMs": 30000,
+    "maxQueuedJobs": 100000,
+    "maxJobBytes": 1048576,
+    "maxEnqueueBatch": 1000,
+    "maxDatabaseBytes": 1073741824
   },
   {
     "id": "postgres-config",

@@ -113,14 +113,18 @@ test("registers and exercises all outbox nodes", async () => {
     sink: "postgres-sink",
     action: "status",
   });
+  assert.equal(enqueue.statuses.at(-1).text, "0 queued");
 
   await harness.input(enqueue, {
     payload: { deviceId: "sensor-1", value: 42 },
     outboxJob: { dedupeKey: "node-test" },
   });
   assert.equal(enqueue.sent[0].outboxEnqueue.inserted, 1);
+  assert.equal(enqueue.sent[0].outboxEnqueue.queueDepth, 1);
+  assert.equal(enqueue.statuses.at(-1).text, "1 queued");
 
   await harness.input(claim);
+  assert.equal(enqueue.statuses.at(-1).text, "1 queued");
   const delivery = claim.sent[0];
   assert.deepEqual(delivery.payload, { deviceId: "sensor-1", value: 42 });
   assert.equal(delivery.outbox.attempts, 1);
@@ -131,11 +135,13 @@ test("registers and exercises all outbox nodes", async () => {
   await harness.input(settle, delivery);
   assert.equal(settle.sent[0][0].outboxSettlement.state, "delivered");
   assert.equal(settle.sent[0][1], null);
+  assert.equal(enqueue.statuses.at(-1).text, "0 queued");
 
   await harness.input(control);
   assert.equal(control.sent[0].outboxControl.action, "status");
   assert.equal(control.sent[0].payload.jobs[0].state, "delivered");
 
+  await harness.close(enqueue);
   await harness.close(claim);
   await harness.close(config);
 });

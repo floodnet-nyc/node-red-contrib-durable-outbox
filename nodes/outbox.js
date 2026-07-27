@@ -70,6 +70,17 @@ module.exports = function registerOutboxNodes(RED) {
       config.circuitBreakerCooldownMs,
       30_000
     );
+    const queueDepthListeners = new Set();
+    this.subscribeQueueDepth = (listener) => {
+      queueDepthListeners.add(listener);
+      listener(this.store.countQueued(this.sinkKey));
+      return () => queueDepthListeners.delete(listener);
+    };
+    this.notifyQueueDepth = () => {
+      const count = this.store.countQueued(this.sinkKey);
+      for (const listener of queueDepthListeners) listener(count);
+      return count;
+    };
   }
 
   function getSinkConfigNode(runtimeNode, id, expectedOutbox) {
@@ -93,6 +104,13 @@ module.exports = function registerOutboxNodes(RED) {
     const sinkConfig = getSinkConfigNode(node, config.sink);
     const payloadProperty = config.payloadProperty || "payload";
     const optionsProperty = config.optionsProperty || "outboxJob";
+    const unsubscribeQueueDepth = sinkConfig.subscribeQueueDepth((count) => {
+      node.status({
+        fill: "green",
+        shape: "dot",
+        text: `${count} queued`,
+      });
+    });
 
     node.on("input", (msg, send, done) => {
       send = send || node.send.bind(node);
@@ -135,18 +153,19 @@ module.exports = function registerOutboxNodes(RED) {
           jobs: results,
           inserted: results.filter((job) => job.inserted).length,
           duplicates: results.filter((job) => !job.inserted).length,
+          queueDepth: sinkConfig.notifyQueueDepth(),
         };
-        node.status({
-          fill: "green",
-          shape: "dot",
-          text: `${msg.outboxEnqueue.inserted} queued`,
-        });
         send(msg);
         done();
       } catch (error) {
         node.status({ fill: "red", shape: "ring", text: "enqueue failed" });
         done(error);
       }
+    });
+
+    node.on("close", (removed, done) => {
+      unsubscribeQueueDepth();
+      done();
     });
   }
 
@@ -165,6 +184,7 @@ module.exports = function registerOutboxNodes(RED) {
           maxInFlight,
           batchSize,
         });
+        sinkConfig.notifyQueueDepth();
         if (jobs.length) {
           node.status({
             fill: "blue",
@@ -259,6 +279,7 @@ module.exports = function registerOutboxNodes(RED) {
           circuitBreakerThreshold: sinkConfig.circuitBreakerThreshold,
           circuitBreakerCooldownMs: sinkConfig.circuitBreakerCooldownMs,
         });
+        sinkConfig.notifyQueueDepth();
         msg.outboxSettlement = result;
 
         if (result.state === "stale_lease") {
@@ -371,6 +392,7 @@ module.exports = function registerOutboxNodes(RED) {
           default:
             throw new Error(`Unsupported outbox control action: ${action}`);
         }
+        sinkConfig.notifyQueueDepth();
 
         msg.outboxControl = {
           action,

@@ -389,6 +389,46 @@ test("infrastructure jobs retry past attempt limit and open a circuit", (t) => {
   assert.equal(store.getSinkControl("postgres").consecutiveFailures, 0);
 });
 
+test("circuit accounting is independent of retryability and failure class", (t) => {
+  const store = withStore(t, { random: () => 0 });
+  function fail(value, outcome) {
+    const [queued] = store.enqueue({
+      sink: "postgres",
+      payload: { value },
+    });
+    store.claim({ sink: "postgres" });
+    return settle(store, queued.id, {
+      success: false,
+      error: `failure ${value}`,
+      circuitBreakerThreshold: 2,
+      ...outcome,
+    });
+  }
+
+  const dead = fail(1, {
+    retryable: false,
+    circuitFailure: true,
+    failureClass: "postgres-connectivity",
+  });
+  assert.equal(dead.state, "dead");
+  assert.equal(store.getSinkControl("postgres").consecutiveFailures, 1);
+
+  fail(2, {
+    retryable: true,
+    circuitFailure: false,
+    failureClass: "data",
+  });
+  assert.equal(store.getSinkControl("postgres").consecutiveFailures, 1);
+
+  const result = fail(3, {
+    retryable: true,
+    circuitFailure: true,
+    failureClass: "custom-label",
+  });
+  assert.equal(result.circuit.consecutiveFailures, 2);
+  assert.equal(result.circuit.pausedUntil != null, true);
+});
+
 test("bulk dead-letter recovery filters by sink and failure class", (t) => {
   const store = withStore(t);
   const jobs = store.enqueue([

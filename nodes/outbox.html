@@ -308,6 +308,10 @@
     <input type="text" id="node-input-name">
   </div>
   <div class="form-row">
+    <label for="node-input-sink">Sink</label>
+    <input type="text" id="node-input-sink">
+  </div>
+  <div class="form-row">
     <label for="node-input-action">Action</label>
     <select id="node-input-action">
       <option value="status">Status</option>
@@ -322,10 +326,6 @@
       <option value="maintenance">Database maintenance</option>
       <option value="msg">Read msg.outboxAction</option>
     </select>
-  </div>
-  <div class="form-row">
-    <label for="node-input-sink">Sink</label>
-    <input type="text" id="node-input-sink">
   </div>
   <div class="form-row outbox-control-failure-class-row">
     <label for="node-input-failureClass">Failure class</label>
@@ -392,12 +392,18 @@
 <script type="text/html" data-help-name="outbox-settle">
   <p>Marks a leased job for the selected sink delivered, schedules a bounded retry, or moves it
   atomically to the dead-letter table. A mismatched job sink is rejected. Set
-  <code>msg.outboxFailureClass</code> to <code>infrastructure</code> to participate in the sink
-  config's circuit breaker. The second output receives dead-lettered jobs.</p>
+  <code>msg.outboxCircuitFailure</code> to a boolean to control whether a failed attempt
+  increments the sink config's circuit breaker. Use <code>msg.outboxFailureClass</code> as an
+  optional operational label for dead-letter filtering. The second output receives
+  dead-lettered jobs.</p>
   <p>
     Settlement is fenced by the lease token in <code>msg.outbox.leaseToken</code>. A worker
     whose lease expired cannot settle a newer worker's claim; its result is
     <code>stale_lease</code>.
+  </p>
+  <p>
+    For compatibility, an omitted <code>msg.outboxCircuitFailure</code> is derived from an
+    explicit failure class when present; otherwise retryable failures affect the circuit.
   </p>
 </script>
 

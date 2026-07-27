@@ -268,6 +268,20 @@ module.exports = function registerOutboxNodes(RED) {
         const failureClass =
           msg.outboxFailureClass ||
           (retryable ? "infrastructure" : "data");
+        let circuitFailure = false;
+        if (!success) {
+          if (
+            msg.outboxCircuitFailure != null &&
+            typeof msg.outboxCircuitFailure !== "boolean"
+          ) {
+            throw new TypeError("msg.outboxCircuitFailure must be a boolean");
+          }
+          circuitFailure =
+            msg.outboxCircuitFailure ??
+            (msg.outboxFailureClass
+              ? failureClass === "infrastructure"
+              : retryable);
+        }
 
         const result = sinkConfig.store.settle(id, {
           leaseToken: msg.outbox.leaseToken,
@@ -276,6 +290,7 @@ module.exports = function registerOutboxNodes(RED) {
           error,
           status,
           failureClass,
+          circuitFailure,
           circuitBreakerThreshold: sinkConfig.circuitBreakerThreshold,
           circuitBreakerCooldownMs: sinkConfig.circuitBreakerCooldownMs,
         });
@@ -289,7 +304,7 @@ module.exports = function registerOutboxNodes(RED) {
           node.status({ fill: "red", shape: "dot", text: "dead letter" });
           send([null, msg]);
         } else if (result.state === "delivered") {
-          node.status({ fill: "green", shape: "dot", text: "delivered" });
+          node.status({ fill: "green", shape: "dot" });
           send([msg, null]);
         } else {
           node.status({

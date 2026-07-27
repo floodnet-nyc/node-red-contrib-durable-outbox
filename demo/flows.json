@@ -348,7 +348,7 @@
         "z": "demo-flow",
         "g": "8d802f1c995e82e8",
         "name": "Classify PostgreSQL failure",
-        "func": "const permanentCodes = new Set([\n    '22001', '22003', '22P02',\n    '23502', '23503', '23505', '23514',\n    '42601', '42703', '42P01'\n]);\nconst code = msg.error?.code;\nconst permanent = permanentCodes.has(code);\nmsg.outboxOutcome = 'failure';\nmsg.outboxRetryable = !permanent;\nmsg.outboxFailureClass = permanent ? 'data' : 'infrastructure';\nmsg.outboxError = msg.error || `PostgreSQL delivery failed (${code || 'unknown'})`;\nreturn msg;",
+        "func": "const permanentCodes = new Set([\n    '22001', '22003', '22P02',\n    '23502', '23503', '23505', '23514',\n    '42601', '42703', '42P01'\n]);\nconst code = msg.error?.code;\nconst permanent = permanentCodes.has(code);\nmsg.outboxOutcome = 'failure';\nmsg.outboxRetryable = !permanent;\nmsg.outboxCircuitFailure = !permanent;\nmsg.outboxFailureClass = permanent ? 'data' : 'postgres-connectivity';\nmsg.outboxError = msg.error || `PostgreSQL delivery failed (${code || 'unknown'})`;\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,

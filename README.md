@@ -64,7 +64,7 @@ using a versioned encoding. Unsafe values such as circular references,
 functions, streams, and arbitrary class instances are rejected before the
 transaction commits.
 
-With `retryUntilExpired: true`, retryable infrastructure failures ignore the
+With `retryUntilExpired: true`, retryable failures ignore the
 attempt count and remain active until `maxAgeMs`. Backoff is still bounded by
 `maxDelayMs`. This is the recommended policy for idempotent PostgreSQL
 deliveries.
@@ -96,7 +96,7 @@ An expired lease is eligible for recovery by another poll. Each new claim gets
 a fresh lease token. Settlement requires that token, so a slow worker cannot
 settle a job after another worker has reclaimed it.
 
-After the configured number of consecutive infrastructure failures, claims
+After the configured number of consecutive circuit failures, claims
 for that sink pause for the circuit-breaker cooldown. Claims become eligible
 again after the cooldown, and a successful delivery closes the circuit.
 
@@ -110,10 +110,19 @@ reads:
 ```js
 msg.outboxOutcome = "success"; // any other value means failure
 msg.outboxRetryable = true;
-msg.outboxFailureClass = "infrastructure"; // or "data"
+msg.outboxCircuitFailure = true;
+msg.outboxFailureClass = "postgres-connectivity";
 msg.outboxError = msg.error;
 msg.outboxStatus = 503;
 ```
+
+`outboxRetryable` controls the individual job. `outboxCircuitFailure` controls
+whether this failed attempt increments the sink circuit breaker.
+`outboxFailureClass` is an optional operational label used for dead-letter
+inspection and recovery filters. When `outboxCircuitFailure` is omitted, the
+node preserves the earlier behavior: an explicit `infrastructure` class affects
+the circuit, an explicit other class does not, and an unclassified retryable
+failure affects the circuit.
 
 The first output receives delivered jobs and scheduled retries. The second
 output receives jobs moved to the dead-letter table. A stale settlement is

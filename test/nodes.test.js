@@ -313,7 +313,8 @@ test("settle uses circuit policy from the selected sink config", async () => {
   await harness.input(enqueue, { payload: { value: 1 } });
   await harness.input(claim);
   const message = claim.sent[0];
-  message.outboxFailureClass = "infrastructure";
+  message.outboxFailureClass = "postgres-connectivity";
+  message.outboxCircuitFailure = true;
   message.outboxError = "connection timed out";
   await harness.input(settle, message);
 

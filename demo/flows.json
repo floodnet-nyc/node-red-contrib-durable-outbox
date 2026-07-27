@@ -47,7 +47,8 @@
             "postgres-catch",
             "classify-postgres",
             "retry-debug",
-            "dead-debug"
+            "dead-debug",
+            "f7c2beed2bc7bc0b"
         ],
         "x": 54,
         "y": 299,
@@ -121,7 +122,8 @@
             "49135bf8bd191fb8",
             "b7dc8125b7065c8b",
             "d1d87d3262c71179",
-            "510127e721507621"
+            "510127e721507621",
+            "c76b66ceb78c2c3a"
         ],
         "x": 54,
         "y": 319,
@@ -433,12 +435,9 @@
         "y": 240,
         "wires": [
             [
-                "delivered-debug",
-                "retry-debug"
+                "delivered-debug"
             ],
-            [
-                "dead-debug"
-            ]
+            []
         ],
         "l": false
     },
@@ -477,7 +476,7 @@
         "y": 340,
         "wires": [
             [
-                "settle-success"
+                "f7c2beed2bc7bc0b"
             ]
         ]
     },
@@ -674,6 +673,26 @@
         "wires": []
     },
     {
+        "id": "f7c2beed2bc7bc0b",
+        "type": "outbox-settle",
+        "z": "demo-flow",
+        "g": "8d802f1c995e82e8",
+        "name": "",
+        "sink": "postgres-outbox-sink",
+        "outcome": "success",
+        "x": 685,
+        "y": 340,
+        "wires": [
+            [
+                "retry-debug"
+            ],
+            [
+                "dead-debug"
+            ]
+        ],
+        "l": false
+    },
+    {
         "id": "34cd0a4a977f965e",
         "type": "function",
         "z": "f9d60f4c68faa702",
@@ -720,7 +739,7 @@
         "g": "d1db51ee627713f8",
         "name": "poll",
         "props": [],
-        "repeat": "2",
+        "repeat": "5",
         "crontab": "",
         "once": true,
         "onceDelay": 0.1,
@@ -761,12 +780,9 @@
         "y": 260,
         "wires": [
             [
-                "89377ce555965f22",
-                "d1d87d3262c71179"
+                "89377ce555965f22"
             ],
-            [
-                "510127e721507621"
-            ]
+            []
         ],
         "l": false
     },
@@ -824,7 +840,7 @@
         "y": 360,
         "wires": [
             [
-                "84b70f32fa160c6e"
+                "c76b66ceb78c2c3a"
             ]
         ]
     },
@@ -907,7 +923,7 @@
         "g": "c47e7204be547f17",
         "name": "poll",
         "props": [],
-        "repeat": "2",
+        "repeat": "0.5",
         "crontab": "",
         "once": true,
         "onceDelay": "1",
@@ -1142,5 +1158,25 @@
                 "0a97e593c25e3942"
             ]
         ]
+    },
+    {
+        "id": "c76b66ceb78c2c3a",
+        "type": "outbox-settle",
+        "z": "f9d60f4c68faa702",
+        "g": "bd059afaef9221ff",
+        "name": "",
+        "sink": "7cb28bdf3de0af1d",
+        "outcome": "retry",
+        "x": 625,
+        "y": 360,
+        "wires": [
+            [
+                "d1d87d3262c71179"
+            ],
+            [
+                "510127e721507621"
+            ]
+        ],
+        "l": false
     }
 ]

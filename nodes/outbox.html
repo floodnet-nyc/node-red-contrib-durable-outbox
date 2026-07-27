@@ -123,7 +123,8 @@
     color: "#C7E9C0",
     defaults: {
       name: { value: "" },
-      sink: { value: "", type: "outbox-sink-config", required: true }
+      sink: { value: "", type: "outbox-sink-config", required: true },
+      outputMode: { value: "individual", required: true }
     },
     inputs: 1,
     outputs: 1,
@@ -336,6 +337,13 @@
     <label for="node-input-sink">Sink</label>
     <input type="text" id="node-input-sink">
   </div>
+  <div class="form-row">
+    <label for="node-input-outputMode">Output mode</label>
+    <select id="node-input-outputMode">
+      <option value="individual">Individual messages</option>
+      <option value="batch">Batch message</option>
+    </select>
+  </div>
 </script>
 
 <script type="text/html" data-template-name="outbox-settle">
@@ -445,6 +453,13 @@
   <p>Each input message atomically leases a bounded batch of the oldest ready jobs for a sink.
   Connect a repeating Inject node to schedule worker polls. Lease duration, claim batch, and
   maximum in-flight capacity come from the selected sink config.</p>
+  <p>
+    Individual mode emits one message per lease with <code>msg.outbox</code>. Batch mode emits
+    one message whose <code>msg.payload</code> is an array of job payloads and whose
+    <code>msg.outboxBatch</code> array preserves the corresponding lease metadata. A batch
+    message can pass directly through a batch database operation and into
+    <code>outbox-settle</code>.
+  </p>
 </script>
 
 <script type="text/html" data-help-name="outbox-settle">
@@ -462,6 +477,12 @@
   <p>
     For compatibility, an omitted <code>msg.outboxCircuitFailure</code> is derived from an
     explicit failure class when present; otherwise retryable failures affect the circuit.
+  </p>
+  <p>
+    The node also accepts batch claims in <code>msg.outboxBatch</code>. Every lease is settled,
+    while one failed batch contributes at most one circuit failure. Results are grouped under
+    <code>msg.outboxSettlements</code> as <code>delivered</code>, <code>retrying</code>,
+    <code>dead</code>, and <code>stale</code>.
   </p>
 </script>
 

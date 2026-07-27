@@ -77,7 +77,7 @@ selected sink config. Use a standard repeating Inject node to set the polling
 interval and optionally trigger once when flows start. A poll fills only the
 remaining in-flight capacity.
 
-The output has this shape:
+Individual output mode emits one message per lease:
 
 ```js
 {
@@ -91,6 +91,25 @@ The output has this shape:
     }
 }
 ```
+
+Batch output mode emits one message for the complete claim:
+
+```js
+{
+    payload: [
+        { /* first persisted payload */ },
+        { /* second persisted payload */ }
+    ],
+    outboxBatch: [
+        { id: "...", sink: "postgres", leaseToken: "...", attempts: 1 },
+        { id: "...", sink: "postgres", leaseToken: "...", attempts: 1 }
+    ]
+}
+```
+
+The payload array can pass through one atomic PostgreSQL batch statement.
+`outboxBatch` preserves every corresponding lease and is passed unchanged to
+`outbox-settle`; no Batch, Join, packing, or fan-out nodes are required.
 
 An expired lease is eligible for recovery by another poll. Each new claim gets
 a fresh lease token. Settlement requires that token, so a slow worker cannot
@@ -128,6 +147,13 @@ The first output receives delivered jobs and scheduled retries. The second
 output receives jobs moved to the dead-letter table. A stale settlement is
 returned with `msg.outboxSettlement.state === "stale_lease"` and does not
 change the job or circuit state.
+
+When `msg.outboxBatch` is present, every preserved lease is settled. A failed
+database batch contributes at most one circuit failure, while retry and
+dead-letter decisions remain per job. `msg.outboxSettlements` groups the
+results into `delivered`, `retrying`, `dead`, and `stale` arrays. If a batch
+contains both retrying and dead jobs, the first output receives the active
+lease subset and the second receives the dead-letter subset.
 
 ### `outbox-control`
 
@@ -173,6 +199,7 @@ The tests cover:
 - `Date`/`Buffer` serialization and unsafe-payload rejection;
 - maximum in-flight enforcement;
 - bounded batch claiming;
+- native batch messages and batch-aware settlement;
 - expired lease recovery;
 - stale-worker lease fencing;
 - bounded exponential backoff with jitter;
@@ -198,7 +225,11 @@ Open [Node-RED](http://localhost:1880). The demo creates one sensor reading
 every two seconds, commits it to SQLite, leases it to a PostgreSQL worker, and
 acknowledges it only after the upsert succeeds. Delivery uses
 `node-red-contrib-postgresql` 0.15.4 with an environment-configured connection
-pool and a parameterized `msg.query` / `msg.params` upsert.
+pool and a parameterized `msg.query` / `msg.params` upsert. The
+`Durable PostgreSQL outbox demo` tab shows individual delivery. The
+`Batch outbox` tab claims one payload array with its `outboxBatch` leases,
+executes one PostgreSQL `unnest` upsert, and passes the batch directly to
+batch-aware settlement.
 
 The host `./demo` directory is mounted at `/data`, so deploying in the Node-RED
 editor writes directly to `./demo/flows.json` and changes survive container

@@ -185,6 +185,7 @@ module.exports = function registerOutboxNodes(RED) {
     const sinkConfig = getSinkConfigNode(node, config.sink);
     const { store, sinkKey: sink, leaseMs, maxInFlight, batchSize } =
       sinkConfig;
+    const outputMode = config.outputMode || "individual";
 
     function claim(send, done) {
       try {
@@ -202,12 +203,23 @@ module.exports = function registerOutboxNodes(RED) {
             shape: "dot",
             text: `${jobs.length} leased`,
           });
-          for (const job of jobs) {
+          if (outputMode === "batch") {
             send({
               _msgid: RED.util.generateId(),
-              payload: job.payload,
-              outbox: job,
+              payload: jobs.map((job) => job.payload),
+              outboxBatch: jobs.map((job) => {
+                const { payload, ...metadata } = job;
+                return metadata;
+              }),
             });
+          } else {
+            for (const job of jobs) {
+              send({
+                _msgid: RED.util.generateId(),
+                payload: job.payload,
+                outbox: job,
+              });
+            }
           }
         } else {
           const control = store.getSinkControl(sink);
@@ -250,59 +262,180 @@ module.exports = function registerOutboxNodes(RED) {
     const sinkConfig = getSinkConfigNode(node, config.sink);
     const configuredOutcome = config.outcome || "success";
 
+    function resolveOutcome(msg) {
+      const success =
+        configuredOutcome === "success" ||
+        (configuredOutcome === "msg" && msg.outboxOutcome === "success");
+      const retryable =
+        configuredOutcome === "retry"
+          ? true
+          : configuredOutcome === "dead"
+            ? false
+            : msg.outboxRetryable !== false;
+      const error =
+        msg.outboxError ||
+        msg.error ||
+        (success ? null : msg.payload?.error) ||
+        (success ? null : "Delivery failed");
+      const status =
+        msg.statusCode ?? msg.outboxStatus ?? msg.payload?.statusCode;
+      const failureClass =
+        msg.outboxFailureClass ||
+        (retryable ? "infrastructure" : "data");
+      let circuitFailure = false;
+      if (!success) {
+        if (
+          msg.outboxCircuitFailure != null &&
+          typeof msg.outboxCircuitFailure !== "boolean"
+        ) {
+          throw new TypeError("msg.outboxCircuitFailure must be a boolean");
+        }
+        circuitFailure =
+          msg.outboxCircuitFailure ??
+          (msg.outboxFailureClass
+            ? failureClass === "infrastructure"
+            : retryable);
+      }
+      return {
+        success,
+        retryable,
+        error,
+        status,
+        failureClass,
+        circuitFailure,
+      };
+    }
+
+    function validateOutbox(outbox) {
+      if (!outbox?.id) {
+        throw new Error("Every settlement requires an outbox job id");
+      }
+      if (
+        !outbox.leaseToken ||
+        typeof outbox.leaseToken !== "string"
+      ) {
+        throw new Error(`Outbox job ${outbox.id} requires a lease token`);
+      }
+      if (outbox.sink !== sinkConfig.sinkKey) {
+        throw new Error(
+          `Job sink ${outbox.sink} does not match configured sink ${sinkConfig.sinkKey}`
+        );
+      }
+    }
+
+    function settleOutbox(outbox, outcome, circuitFailure) {
+      return sinkConfig.store.settle(outbox.id, {
+        leaseToken: outbox.leaseToken,
+        success: outcome.success,
+        retryable: outcome.retryable,
+        error: outcome.error,
+        status: outcome.status,
+        failureClass: outcome.failureClass,
+        circuitFailure,
+        circuitBreakerThreshold: sinkConfig.circuitBreakerThreshold,
+        circuitBreakerCooldownMs: sinkConfig.circuitBreakerCooldownMs,
+      });
+    }
+
     node.on("input", (msg, send, done) => {
       send = send || node.send.bind(node);
       try {
-        const id = msg.outbox?.id;
-        if (!id) throw new Error("msg.outbox.id is required to settle a job");
-        if (msg.outbox.sink !== sinkConfig.sinkKey) {
-          throw new Error(
-            `Job sink ${msg.outbox.sink} does not match configured sink ${sinkConfig.sinkKey}`
-          );
-        }
-
-        const success =
-          configuredOutcome === "success" ||
-          (configuredOutcome === "msg" && msg.outboxOutcome === "success");
-        const retryable =
-          configuredOutcome === "retry"
-            ? true
-            : configuredOutcome === "dead"
-              ? false
-              : msg.outboxRetryable !== false;
-        const error =
-          msg.outboxError ||
-          msg.error ||
-          (success ? null : msg.payload?.error) ||
-          (success ? null : "Delivery failed");
-        const status =
-          msg.statusCode ?? msg.outboxStatus ?? msg.payload?.statusCode;
-        const failureClass =
-          msg.outboxFailureClass ||
-          (retryable ? "infrastructure" : "data");
-        let circuitFailure = false;
-        if (!success) {
-          if (
-            msg.outboxCircuitFailure != null &&
-            typeof msg.outboxCircuitFailure !== "boolean"
-          ) {
-            throw new TypeError("msg.outboxCircuitFailure must be a boolean");
+        const outcome = resolveOutcome(msg);
+        if (Array.isArray(msg.outboxBatch)) {
+          if (!msg.outboxBatch.length) {
+            throw new Error("msg.outboxBatch must contain at least one lease");
           }
-          circuitFailure = msg.outboxCircuitFailure ?? retryable !== false;
+          for (const outbox of msg.outboxBatch) validateOutbox(outbox);
+
+          const entries = [];
+          let circuitFailurePending =
+            !outcome.success &&
+            sinkConfig.circuitBreakerEnabled &&
+            outcome.circuitFailure;
+          for (const outbox of msg.outboxBatch) {
+            const result = settleOutbox(
+              outbox,
+              outcome,
+              circuitFailurePending
+            );
+            if (
+              circuitFailurePending &&
+              result.state !== "stale_lease"
+            ) {
+              circuitFailurePending = false;
+            }
+            entries.push({ outbox, result });
+          }
+          sinkConfig.notifyQueueDepth();
+
+          const summary = {
+            delivered: entries
+              .filter(({ result }) => result.state === "delivered")
+              .map(({ result }) => result),
+            retrying: entries
+              .filter(({ result }) => result.state === "pending")
+              .map(({ result }) => result),
+            dead: entries
+              .filter(({ result }) => result.state === "dead")
+              .map(({ result }) => result),
+            stale: entries
+              .filter(({ result }) => result.state === "stale_lease")
+              .map(({ result }) => result),
+          };
+          const activeEntries = entries.filter(
+            ({ result }) => result.state !== "dead"
+          );
+          const deadEntries = entries.filter(
+            ({ result }) => result.state === "dead"
+          );
+          const batchMessage = (selected) => ({
+            ...msg,
+            outboxBatch: selected.map(({ outbox }) => outbox),
+            outboxSettlements: summary,
+          });
+
+          if (summary.dead.length) {
+            node.status({
+              fill: "red",
+              shape: "dot",
+              text: `${summary.dead.length} dead`,
+            });
+          } else if (summary.retrying.length) {
+            node.status({
+              fill: "yellow",
+              shape: "ring",
+              text: `${summary.retrying.length} retrying`,
+            });
+          } else if (summary.delivered.length) {
+            node.status({
+              fill: "green",
+              shape: "dot",
+              text: `${summary.delivered.length} delivered`,
+            });
+          } else {
+            node.status({
+              fill: "yellow",
+              shape: "ring",
+              text: `${summary.stale.length} stale`,
+            });
+          }
+          send([
+            activeEntries.length ? batchMessage(activeEntries) : null,
+            deadEntries.length ? batchMessage(deadEntries) : null,
+          ]);
+          done();
+          return;
         }
 
-        const result = sinkConfig.store.settle(id, {
-          leaseToken: msg.outbox.leaseToken,
-          success,
-          retryable,
-          error,
-          status,
-          failureClass,
-          circuitFailure:
-            sinkConfig.circuitBreakerEnabled && circuitFailure,
-          circuitBreakerThreshold: sinkConfig.circuitBreakerThreshold,
-          circuitBreakerCooldownMs: sinkConfig.circuitBreakerCooldownMs,
-        });
+        if (!msg.outbox?.id) {
+          throw new Error("msg.outbox.id is required to settle a job");
+        }
+        validateOutbox(msg.outbox);
+        const result = settleOutbox(
+          msg.outbox,
+          outcome,
+          sinkConfig.circuitBreakerEnabled && outcome.circuitFailure
+        );
         sinkConfig.notifyQueueDepth();
         msg.outboxSettlement = result;
 

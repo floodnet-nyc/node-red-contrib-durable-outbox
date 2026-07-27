@@ -262,6 +262,90 @@ test("claim emits a bounded batch and control exposes lifecycle actions", async 
   await harness.close(config);
 });
 
+test("batch claim preserves leases and batch settle partitions outcomes", async () => {
+  const harness = createHarness();
+  const config = harness.instantiate("durable-outbox-config", {
+    id: "outbox",
+    filename: ":memory:",
+  });
+  harness.instantiate("outbox-sink-config", {
+    id: "postgres-sink",
+    outbox: "outbox",
+    sinkKey: "postgres",
+    maxInFlight: 3,
+    batchSize: 3,
+    maxAttempts: 3,
+    circuitBreakerThreshold: 2,
+  });
+  const enqueue = harness.instantiate("outbox-enqueue", {
+    sink: "postgres-sink",
+  });
+  const claim = harness.instantiate("outbox-claim", {
+    sink: "postgres-sink",
+    outputMode: "batch",
+  });
+  const settle = harness.instantiate("outbox-settle", {
+    sink: "postgres-sink",
+    outcome: "retry",
+  });
+
+  for (const value of [1, 2, 3]) {
+    await harness.input(enqueue, {
+      payload: { value },
+      outboxJob: {
+        dedupeKey: `batch-${value}`,
+        maxAttempts: value === 1 ? 1 : 3,
+      },
+    });
+  }
+
+  await harness.input(claim);
+  assert.equal(claim.sent.length, 1);
+  const batch = claim.sent[0];
+  assert.deepEqual(
+    batch.payload.map(({ value }) => value).sort(),
+    [1, 2, 3]
+  );
+  assert.equal(batch.outboxBatch.length, 3);
+  assert.equal(
+    batch.outboxBatch.every(
+      (outbox, index) =>
+        config.store.getJob(outbox.id).payload.value ===
+        batch.payload[index].value
+    ),
+    true
+  );
+  assert.equal(
+    batch.outboxBatch.every(
+      (outbox) =>
+        typeof outbox.leaseToken === "string" &&
+        !Object.prototype.hasOwnProperty.call(outbox, "payload")
+    ),
+    true
+  );
+
+  batch.outboxCircuitFailure = true;
+  batch.outboxFailureClass = "postgres-connectivity";
+  batch.outboxError = "connection timed out";
+  await harness.input(settle, batch);
+
+  const [active, dead] = settle.sent[0];
+  assert.equal(active.outboxBatch.length, 2);
+  assert.equal(dead.outboxBatch.length, 1);
+  assert.equal(active.outboxSettlements.retrying.length, 2);
+  assert.equal(active.outboxSettlements.dead.length, 1);
+  assert.equal(dead.outboxSettlements, active.outboxSettlements);
+  assert.equal(
+    config.store.getSinkControl("postgres").consecutiveFailures,
+    1
+  );
+  assert.equal(config.store.listDeadLetters().length, 1);
+
+  await harness.close(enqueue);
+  await harness.close(claim);
+  await harness.close(config);
+});
+
 test("fixed-sink enqueue rejects a mismatched durable sink key", async () => {
   const harness = createHarness();
   const config = harness.instantiate("durable-outbox-config", {

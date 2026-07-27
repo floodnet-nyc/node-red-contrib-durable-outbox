@@ -103,13 +103,11 @@
             "84b70f32fa160c6e",
             "89377ce555965f22",
             "6e27a6c9ede9e8b8",
-            "64490057068d8517",
-            "80f356eeffe86fca",
             "34cd0a4a977f965e"
         ],
         "x": 54,
         "y": 219,
-        "w": 1092,
+        "w": 852,
         "h": 82
     },
     {
@@ -144,7 +142,7 @@
             "aa454e7d4c6c1737",
             "e489f96705b9518f"
         ],
-        "x": 554,
+        "x": 434,
         "y": 119,
         "w": 362,
         "h": 82
@@ -161,9 +159,9 @@
             "5d928b57c02e7808",
             "62ecc364f0c3f682"
         ],
-        "x": 14,
+        "x": 54,
         "y": 119,
-        "w": 522,
+        "w": 352,
         "h": 82
     },
     {
@@ -376,6 +374,7 @@
         "g": "84ef9b0fd4902c58",
         "name": "Lease PostgreSQL work",
         "sink": "postgres-outbox-sink",
+        "outputMode": "individual",
         "x": 330,
         "y": 240,
         "wires": [
@@ -693,57 +692,6 @@
         "wires": []
     },
     {
-        "id": "64490057068d8517",
-        "type": "batch",
-        "z": "f9d60f4c68faa702",
-        "g": "d1db51ee627713f8",
-        "name": "",
-        "mode": "interval",
-        "count": 10,
-        "overlap": 0,
-        "interval": "4",
-        "allowEmptySequence": false,
-        "honourParts": false,
-        "topics": [],
-        "x": 520,
-        "y": 260,
-        "wires": [
-            [
-                "80f356eeffe86fca"
-            ]
-        ]
-    },
-    {
-        "id": "80f356eeffe86fca",
-        "type": "join",
-        "z": "f9d60f4c68faa702",
-        "g": "d1db51ee627713f8",
-        "name": "",
-        "mode": "auto",
-        "build": "object",
-        "property": "payload",
-        "propertyType": "msg",
-        "key": "topic",
-        "joiner": "\\n",
-        "joinerType": "str",
-        "useparts": false,
-        "accumulate": true,
-        "timeout": "",
-        "count": "",
-        "reduceRight": false,
-        "reduceExp": "",
-        "reduceInit": "",
-        "reduceInitType": "",
-        "reduceFixup": "",
-        "x": 650,
-        "y": 260,
-        "wires": [
-            [
-                "34cd0a4a977f965e"
-            ]
-        ]
-    },
-    {
         "id": "34cd0a4a977f965e",
         "type": "function",
         "z": "f9d60f4c68faa702",
@@ -756,7 +704,7 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 770,
+        "x": 520,
         "y": 260,
         "wires": [
             [
@@ -775,7 +723,7 @@
         "split": false,
         "rowsPerMsg": 1,
         "outputs": 1,
-        "x": 920,
+        "x": 680,
         "y": 260,
         "wires": [
             [
@@ -810,11 +758,12 @@
         "g": "d1db51ee627713f8",
         "name": "Lease PostgreSQL work",
         "sink": "7cb28bdf3de0af1d",
+        "outputMode": "batch",
         "x": 330,
         "y": 260,
         "wires": [
             [
-                "64490057068d8517"
+                "34cd0a4a977f965e"
             ]
         ]
     },
@@ -826,7 +775,7 @@
         "name": "",
         "sink": "7cb28bdf3de0af1d",
         "outcome": "success",
-        "x": 1035,
+        "x": 795,
         "y": 260,
         "wires": [
             [
@@ -850,7 +799,7 @@
         "targetType": "msg",
         "statusVal": "payload",
         "statusType": "auto",
-        "x": 1085,
+        "x": 845,
         "y": 260,
         "wires": [],
         "l": false
@@ -958,7 +907,7 @@
         "sink": "7cb28bdf3de0af1d",
         "payloadProperty": "payload",
         "optionsProperty": "outboxJob",
-        "x": 690,
+        "x": 570,
         "y": 160,
         "wires": [
             [
@@ -980,7 +929,7 @@
         "targetType": "msg",
         "statusVal": "outboxEnqueue",
         "statusType": "auto",
-        "x": 855,
+        "x": 735,
         "y": 160,
         "wires": [],
         "l": false
@@ -990,14 +939,14 @@
         "type": "inject",
         "z": "f9d60f4c68faa702",
         "g": "c47e7204be547f17",
-        "name": "Generate reading every 2s",
+        "name": "poll",
         "props": [],
         "repeat": "2",
         "crontab": "",
         "once": true,
         "onceDelay": "1",
         "topic": "",
-        "x": 180,
+        "x": 150,
         "y": 160,
         "wires": [
             [
@@ -1018,7 +967,7 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 430,
+        "x": 300,
         "y": 160,
         "wires": [
             [

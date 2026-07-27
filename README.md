@@ -22,7 +22,7 @@ Install the module and create three configuration nodes, then wire four nodes:
 3. **`outbox-enqueue`** — Select the sink config. Wire your data source into the input.
 4. **`outbox-claim`** — Select the same sink. Feed it a repeating Inject node (e.g. every 5s).
 5. **`outbox-settle`** — Select the same sink, set `Outcome: Success`. Wire the claim output through your delivery node (e.g. a PostgreSQL upsert), then into settle.
-6. On failure: add a Catch node scoped to your delivery node, wire through a Function node that sets `msg.outboxOutcome = "failure"` and `msg.outboxRetryable = true`, then into a second `outbox-settle (msg mode)`.
+6. On failure: add a Catch node scoped to your delivery node, wire through a Function node that sets `msg.outboxRetryable = true`, then into a second `outbox-settle (msg mode)`. The circuit breaker and failure class are derived automatically.
 
 That's it. See the [demo flows](#docker-compose-postgresql-demo) below for a complete working example with failure classification and control operations.
 
@@ -146,21 +146,16 @@ for success, retryable failure, or non-retryable failure. The dynamic mode
 reads:
 
 ```js
-msg.outboxOutcome = "success"; // any other value means failure
-msg.outboxRetryable = true;
-msg.outboxCircuitFailure = true;
-msg.outboxFailureClass = "postgres-connectivity";
-msg.outboxError = msg.error;
-msg.outboxStatus = 503;
+msg.outboxOutcome = "success";           // deliver the job
+msg.outboxRetryable = true;              // retry with backoff (primary property)
 ```
 
-`outboxRetryable` controls the individual job. `outboxCircuitFailure` controls
-whether this failed attempt increments the sink circuit breaker.
-`outboxFailureClass` is an optional operational label used for dead-letter
-inspection and recovery filters. When `outboxCircuitFailure` is omitted, the
-node preserves the earlier behavior: an explicit `infrastructure` class affects
-the circuit, an explicit other class does not, and an unclassified retryable
-failure affects the circuit.
+Set only <code>msg.outboxRetryable</code>. The circuit breaker and failure class
+are derived automatically: retryable failures trip the circuit with class
+<code>infrastructure</code>; non-retryable ones don't with class
+<code>data</code>. Advanced users can override with
+<code>msg.outboxCircuitFailure</code>, <code>msg.outboxFailureClass</code>,
+<code>msg.outboxError</code>, and <code>msg.outboxStatus</code>.
 
 The first output receives delivered jobs and scheduled retries. The second
 output receives jobs moved to the dead-letter table. A stale settlement is

@@ -464,19 +464,20 @@
 
 <script type="text/html" data-help-name="outbox-settle">
   <p>Marks a leased job for the selected sink delivered, schedules a bounded retry, or moves it
-  atomically to the dead-letter table. A mismatched job sink is rejected. Set
-  <code>msg.outboxCircuitFailure</code> to a boolean to control whether a failed attempt
-  increments the sink config's circuit breaker. Use <code>msg.outboxFailureClass</code> as an
-  optional operational label for dead-letter filtering. The second output receives
-  dead-lettered jobs.</p>
+  atomically to the dead-letter table. A mismatched job sink is rejected. The second output
+  receives dead-lettered jobs.</p>
   <p>
     Settlement is fenced by the lease token in <code>msg.outbox.leaseToken</code>. A worker
     whose lease expired cannot settle a newer worker's claim; its result is
     <code>stale_lease</code>.
   </p>
   <p>
-    For compatibility, an omitted <code>msg.outboxCircuitFailure</code> is derived from an
-    explicit failure class when present; otherwise retryable failures affect the circuit.
+    In <code>msg</code> outcome mode, set <code>msg.outboxRetryable</code> to <code>true</code>
+    to retry or <code>false</code> to dead-letter. The circuit breaker and failure class are
+    derived automatically: retryable failures trip the circuit with class
+    <code>infrastructure</code>, non-retryable ones do not with class <code>data</code>. Advanced
+    users can override these with <code>msg.outboxCircuitFailure</code>,
+    <code>msg.outboxFailureClass</code>, and <code>msg.outboxError</code>.
   </p>
   <p>
     The node also accepts batch claims in <code>msg.outboxBatch</code>. Every lease is settled,

@@ -295,11 +295,7 @@ module.exports = function registerOutboxNodes(RED) {
         ) {
           throw new TypeError("msg.outboxCircuitFailure must be a boolean");
         }
-        circuitFailure =
-          msg.outboxCircuitFailure ??
-          (msg.outboxFailureClass
-            ? failureClass === "infrastructure"
-            : retryable);
+        circuitFailure = msg.outboxCircuitFailure ?? retryable;
       }
       return { success, retryable, error, status, failureClass, circuitFailure };
     }

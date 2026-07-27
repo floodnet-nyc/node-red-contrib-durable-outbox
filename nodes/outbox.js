@@ -114,7 +114,6 @@ module.exports = function registerOutboxNodes(RED) {
     const node = this;
     const sinkConfig = getSinkConfigNode(node, config.sink);
     const payloadProperty = config.payloadProperty || "payload";
-    const optionsProperty = config.optionsProperty || "outbox";
     const unsubscribeQueueDepth = sinkConfig.subscribeQueueDepth((count) => {
       node.status({
         fill: "green",
@@ -132,16 +131,12 @@ module.exports = function registerOutboxNodes(RED) {
             `msg.${payloadProperty} does not contain an outbox payload`
           );
         }
-        const options = optionsProperty
-          ? RED.util.getMessageProperty(msg, optionsProperty)
-          : undefined;
+        const options = msg.outbox;
         if (
           options != null &&
           (typeof options !== "object" || Array.isArray(options))
         ) {
-          throw new TypeError(
-            `msg.${optionsProperty} must be an object when provided`
-          );
+          throw new TypeError("msg.outbox must be an object when provided");
         }
         if (options?.sink != null && options.sink !== sinkConfig.sinkKey) {
           throw new Error(

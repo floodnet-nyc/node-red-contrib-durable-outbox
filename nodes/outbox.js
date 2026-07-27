@@ -114,7 +114,7 @@ module.exports = function registerOutboxNodes(RED) {
     const node = this;
     const sinkConfig = getSinkConfigNode(node, config.sink);
     const payloadProperty = config.payloadProperty || "payload";
-    const optionsProperty = config.optionsProperty || "outboxJob";
+    const optionsProperty = config.optionsProperty || "outbox";
     const unsubscribeQueueDepth = sinkConfig.subscribeQueueDepth((count) => {
       node.status({
         fill: "green",
@@ -159,7 +159,8 @@ module.exports = function registerOutboxNodes(RED) {
           payload,
         };
         const results = sinkConfig.store.enqueue(job);
-        msg.outboxEnqueue = {
+        if (!msg.outbox) msg.outbox = {};
+        msg.outbox.result = {
           sink: sinkConfig.sinkKey,
           jobs: results,
           inserted: results.filter((job) => job.inserted).length,
@@ -208,10 +209,12 @@ module.exports = function registerOutboxNodes(RED) {
             send({
               _msgid: RED.util.generateId(),
               payload: jobs.map((job) => job.payload),
-              outboxBatch: jobs.map((job) => {
-                const { payload, ...metadata } = job;
-                return metadata;
-              }),
+              outbox: {
+                batch: jobs.map((job) => {
+                  const { payload, ...metadata } = job;
+                  return metadata;
+                }),
+              },
             });
           } else {
             for (const job of jobs) {
@@ -267,11 +270,11 @@ module.exports = function registerOutboxNodes(RED) {
       let success;
       let retryable;
 
-      if (msg.outboxOutcome === "success") {
+      if (msg.outbox?.outcome === "success") {
         success = true;
-      } else if (msg.outboxRetryable != null) {
+      } else if (msg.outbox?.retryable != null) {
         success = false;
-        retryable = msg.outboxRetryable;
+        retryable = msg.outbox.retryable;
       } else if (configuredOutcome === "success") {
         success = true;
       } else {
@@ -280,25 +283,25 @@ module.exports = function registerOutboxNodes(RED) {
       }
 
       const error =
-        msg.outboxError ||
+        msg.outbox?.error ||
         msg.error ||
         (success ? null : msg.payload?.error) ||
         (success ? null : "Delivery failed");
       const status =
-        msg.statusCode ?? msg.outboxStatus ?? msg.payload?.statusCode;
+        msg.statusCode ?? msg.outbox?.status ?? msg.payload?.statusCode;
       const failureClass =
-        msg.outboxFailureClass ||
+        msg.outbox?.failureClass ||
         (retryable ? "infrastructure" : "data");
 
       let circuitFailure = false;
       if (!success) {
         if (
-          msg.outboxCircuitFailure != null &&
-          typeof msg.outboxCircuitFailure !== "boolean"
+          msg.outbox?.circuitFailure != null &&
+          typeof msg.outbox.circuitFailure !== "boolean"
         ) {
-          throw new TypeError("msg.outboxCircuitFailure must be a boolean");
+          throw new TypeError("msg.outbox.circuitFailure must be a boolean");
         }
-        circuitFailure = msg.outboxCircuitFailure ?? retryable;
+        circuitFailure = msg.outbox?.circuitFailure ?? retryable;
       }
       return { success, retryable, error, status, failureClass, circuitFailure };
     }
@@ -338,20 +341,21 @@ module.exports = function registerOutboxNodes(RED) {
       send = send || node.send.bind(node);
       try {
         const outcome = resolveOutcome(msg);
-        if (Array.isArray(msg.outboxBatch)) {
-          if (!msg.outboxBatch.length) {
-            throw new Error("msg.outboxBatch must contain at least one lease");
+        const batch = msg.outbox?.batch;
+        if (batch) {
+          if (!batch.length) {
+            throw new Error("msg.outbox.batch must contain at least one lease");
           }
-          for (const outbox of msg.outboxBatch) validateOutbox(outbox);
+          for (const lease of batch) validateOutbox(lease);
 
           const entries = [];
           let circuitFailurePending =
             !outcome.success &&
             sinkConfig.circuitBreakerEnabled &&
             outcome.circuitFailure;
-          for (const outbox of msg.outboxBatch) {
+          for (const lease of batch) {
             const result = settleOutbox(
-              outbox,
+              lease,
               outcome,
               circuitFailurePending
             );
@@ -361,7 +365,7 @@ module.exports = function registerOutboxNodes(RED) {
             ) {
               circuitFailurePending = false;
             }
-            entries.push({ outbox, result });
+            entries.push({ lease, result });
           }
           sinkConfig.notifyQueueDepth();
 
@@ -387,8 +391,11 @@ module.exports = function registerOutboxNodes(RED) {
           );
           const batchMessage = (selected) => ({
             ...msg,
-            outboxBatch: selected.map(({ outbox }) => outbox),
-            outboxSettlements: summary,
+            outbox: {
+              ...msg.outbox,
+              batch: selected.map(({ lease }) => lease),
+              result: summary,
+            },
           });
 
           if (summary.dead.length) {
@@ -434,7 +441,7 @@ module.exports = function registerOutboxNodes(RED) {
           sinkConfig.circuitBreakerEnabled && outcome.circuitFailure
         );
         sinkConfig.notifyQueueDepth();
-        msg.outboxSettlement = result;
+        msg.outbox.result = result;
 
         if (result.state === "stale_lease") {
           node.status({ fill: "yellow", shape: "ring", text: "stale lease" });
@@ -470,18 +477,18 @@ module.exports = function registerOutboxNodes(RED) {
     node.on("input", (msg, send, done) => {
       send = send || node.send.bind(node);
       try {
-        const action = msg.outboxAction || config.action || "status";
-        const sink = msg.sink || sinkConfig.sinkKey;
-        const failureClass =
-          msg.failureClass || config.failureClass || undefined;
-        const limit = Number(msg.limit ?? config.limit) || 100;
+        const shell = msg.outbox || {};
+        const action = shell.action || config.action || "status";
+        const sink = shell.sink || sinkConfig.sinkKey;
+        const failureClass = shell.failureClass || config.failureClass || undefined;
+        const limit = Number(shell.limit ?? config.limit) || 100;
         const requestedAge = Number(
-          msg.olderThanMs ?? config.olderThanMs ?? D.MAX_AGE_MS
+          shell.olderThanMs ?? config.olderThanMs ?? D.MAX_AGE_MS
         );
         const olderThanMs = Number.isFinite(requestedAge)
           ? requestedAge
           : D.MAX_AGE_MS;
-        const id = msg.deadLetterId || msg.outbox?.id || msg.id;
+        const id = shell.deadLetterId;
         let result;
 
         switch (action) {
@@ -518,9 +525,7 @@ module.exports = function registerOutboxNodes(RED) {
             break;
           case "requeue-one":
             if (!id) {
-              throw new Error(
-                "msg.deadLetterId, msg.outbox.id, or msg.id is required"
-              );
+              throw new Error("msg.outbox.deadLetterId is required");
             }
             result = store.requeueDeadLetter(id);
             break;
@@ -539,8 +544,8 @@ module.exports = function registerOutboxNodes(RED) {
             break;
           case "maintenance":
             result = store.maintenance({
-              checkpoint: msg.checkpoint !== false,
-              vacuum: msg.vacuum === true,
+              checkpoint: shell.checkpoint !== false,
+              vacuum: shell.vacuum === true,
             });
             break;
           default:
@@ -548,11 +553,8 @@ module.exports = function registerOutboxNodes(RED) {
         }
         sinkConfig.notifyQueueDepth();
 
-        msg.outboxControl = {
-          action,
-          sink: sink || null,
-          result,
-        };
+        msg.outbox = shell;
+        msg.outbox.result = { action, sink: sink || null, result };
         msg.payload = result;
         node.status({
           fill: "green",

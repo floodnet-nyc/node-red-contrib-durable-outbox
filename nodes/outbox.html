@@ -324,7 +324,7 @@
   <div class="form-row">
     <label for="node-input-optionsProperty">Options property</label>
     <input type="text" id="node-input-optionsProperty"
-      placeholder="outboxJob">
+      placeholder="outbox">
   </div>
 </script>
 
@@ -387,7 +387,7 @@
       <option value="delete-dead">Delete matching dead letters</option>
       <option value="purge-delivered">Purge delivered jobs</option>
       <option value="maintenance">Database maintenance</option>
-      <option value="msg">Read msg.outboxAction</option>
+      <option value="msg">Read msg.outbox.action</option>
     </select>
   </div>
   <div class="form-row outbox-control-failure-class-row">
@@ -433,7 +433,7 @@
   <p>Atomically persists one job from the configured payload property.</p>
   <p>
     By default, the persisted payload is <code>msg.payload</code>. Optional job metadata comes
-    from <code>msg.outboxJob</code>, including <code>dedupeKey</code>,
+    from <code>msg.outbox</code>, including <code>dedupeKey</code>,
     <code>schemaVersion</code>, or retry overrides. The outbox, stable sink key, and retry
     defaults come from the sink config. A different sink value is rejected.
   </p>
@@ -455,7 +455,7 @@
   <p>
     Individual mode emits one message per lease with <code>msg.outbox</code>. Batch mode emits
     one message whose <code>msg.payload</code> is an array of job payloads and whose
-    <code>msg.outboxBatch</code> array preserves the corresponding lease metadata. A batch
+    <code>msg.outbox.batch</code> array preserves the corresponding lease metadata. A batch
     message can pass directly through a batch database operation and into
     <code>outbox-settle</code>.
   </p>
@@ -471,20 +471,17 @@
     <code>stale_lease</code>.
   </p>
   <p>
-    The configured outcome is the default.
-    <code>msg.outboxOutcome === "success"</code> and
-    <code>msg.outboxRetryable</code> always override it, so a single settle
-    node set to <code>Success</code> can also handle failure wires — just set
-    <code>msg.outboxRetryable</code>: <code>true</code> to retry or
+    The configured outcome is the default. Set
+    <code>msg.outbox.retryable</code> to override it: <code>true</code> to retry or
     <code>false</code> to dead-letter. The circuit breaker and failure class
-    are derived automatically. Set <code>msg.outboxCircuitFailure</code>,
-    <code>msg.outboxFailureClass</code>, or <code>msg.outboxError</code> to
-    override.
+    are derived automatically. Set <code>msg.outbox.circuitFailure</code>,
+    <code>msg.outbox.failureClass</code>, or <code>msg.outbox.error</code> to
+    override individual derivations.
   </p>
   <p>
-    The node also accepts batch claims in <code>msg.outboxBatch</code>. Every lease is settled,
+    The node also accepts batch claims in <code>msg.outbox.batch</code>. Every lease is settled,
     while one failed batch contributes at most one circuit failure. Results are grouped under
-    <code>msg.outboxSettlements</code> as <code>delivered</code>, <code>retrying</code>,
+    <code>msg.outbox.result</code> as <code>delivered</code>, <code>retrying</code>,
     <code>dead</code>, and <code>stale</code>.
   </p>
 </script>
@@ -492,52 +489,50 @@
 <script type="text/html" data-help-name="outbox-control">
   <p>
     Provides message-driven operational control over an outbox. Select a fixed action in the
-    editor, or select <code>msg</code> and set <code>msg.outboxAction</code> at runtime. The
-    selected sink supplies both the default sink key and its parent outbox. Outbox-wide actions
-    such as status, retention, and maintenance operate on that parent outbox. Message
-    properties override the configured sink key.
+    editor or set <code>msg.outbox.action</code> at runtime with the
+    <code>Read msg.outbox.action</code> option. Properties on
+    <code>msg.outbox</code> override the configured defaults.
   </p>
 
   <h3>Inputs</h3>
   <dl class="message-properties">
-    <dt>outboxAction <span class="property-type">string</span></dt>
+    <dt>msg.outbox.action <span class="property-type">string</span></dt>
     <dd>
       Overrides the configured action. Required when the editor action is
-      <code>Read msg.outboxAction</code>.
+      <code>Read msg.outbox.action</code>.
     </dd>
-    <dt class="optional">sink <span class="property-type">string</span></dt>
+    <dt class="optional">msg.outbox.sink <span class="property-type">string</span></dt>
     <dd>
       Overrides the configured sink. Required by <code>pause</code>, <code>resume</code>, and
       <code>retry-now</code>. It is an optional filter for dead-letter actions.
     </dd>
-    <dt class="optional">failureClass <span class="property-type">string</span></dt>
+    <dt class="optional">msg.outbox.failureClass <span class="property-type">string</span></dt>
     <dd>
       Overrides the configured failure class. Used by <code>list-dead</code> and
       <code>requeue-dead</code>; typical values are <code>infrastructure</code> and
       <code>data</code>.
     </dd>
-    <dt class="optional">limit <span class="property-type">number</span></dt>
+    <dt class="optional">msg.outbox.limit <span class="property-type">number</span></dt>
     <dd>
       Overrides the configured maximum number of dead letters to list or requeue. The default
       is 100.
     </dd>
-    <dt class="optional">olderThanMs <span class="property-type">number</span></dt>
+    <dt class="optional">msg.outbox.olderThanMs <span class="property-type">number</span></dt>
     <dd>
       Age threshold for <code>purge-delivered</code>. The default is 86400000 (one day).
     </dd>
-    <dt class="optional">vacuum <span class="property-type">boolean</span></dt>
+    <dt class="optional">msg.outbox.vacuum <span class="property-type">boolean</span></dt>
     <dd>
       Set to true with <code>maintenance</code> to compact the database. Vacuum can block
       ingestion and should be run during a maintenance window.
     </dd>
-    <dt class="optional">checkpoint <span class="property-type">boolean</span></dt>
+    <dt class="optional">msg.outbox.checkpoint <span class="property-type">boolean</span></dt>
     <dd>
       Set to false to skip the WAL checkpoint during <code>maintenance</code>.
     </dd>
-    <dt class="optional">deadLetterId <span class="property-type">string</span></dt>
+    <dt class="optional">msg.outbox.deadLetterId <span class="property-type">string</span></dt>
     <dd>
-      Identifies the job for <code>requeue-one</code>. The node also accepts
-      <code>msg.outbox.id</code> or <code>msg.id</code>, in that order.
+      Identifies the job for <code>requeue-one</code>.
     </dd>
   </dl>
 
@@ -587,7 +582,7 @@
     <dt><code>requeue-one</code></dt>
     <dd>
       Atomically moves one reviewed dead letter back to the pending queue. It requires a job ID
-      in <code>msg.deadLetterId</code>, <code>msg.outbox.id</code>, or <code>msg.id</code>.
+      in <code>msg.outbox.deadLetterId</code>.
     </dd>
 
     <dt><code>delete-dead</code></dt>
@@ -605,7 +600,7 @@
 
     <dt><code>maintenance</code></dt>
     <dd>
-      Checkpoints the SQLite WAL. Set <code>msg.vacuum = true</code> to compact the main
+      Checkpoints the SQLite WAL. Set <code>msg.outbox.vacuum = true</code> to compact the main
       database after retention cleanup; schedule vacuum during a quiet maintenance window.
     </dd>
   </dl>
@@ -613,24 +608,25 @@
   <h3>Outputs</h3>
   <p>
     The input message is preserved. The action result is written to <code>msg.payload</code>
-    and to <code>msg.outboxControl.result</code>. The control envelope also contains the
-    resolved <code>action</code> and <code>sink</code>.
+    and to <code>msg.outbox.result</code>.
   </p>
   <pre>{
-  "outboxControl": {
-    "action": "resume",
-    "sink": "postgres-demo",
+  "outbox": {
     "result": {
-      "released": 17
+      "action": "resume",
+      "sink": "postgres-demo",
+      "result": {
+        "released": 17
+      }
     }
   }
 }</pre>
 
   <h3>Dynamic example</h3>
-  <pre>msg.outboxAction = "requeue-dead";
-msg.sink = "postgres-demo";
-msg.failureClass = "infrastructure";
-msg.limit = 1000;
+  <pre>msg.outbox.action = "requeue-dead";
+msg.outbox.sink = "postgres-demo";
+msg.outbox.failureClass = "infrastructure";
+msg.outbox.limit = 1000;
 return msg;</pre>
 
   <p>

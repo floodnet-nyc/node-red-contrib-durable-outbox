@@ -121,10 +121,10 @@ test("registers and exercises all outbox nodes", async () => {
 
   await harness.input(enqueue, {
     payload: { deviceId: "sensor-1", value: 42 },
-    outboxJob: { dedupeKey: "node-test" },
+    outbox: { dedupeKey: "node-test" },
   });
-  assert.equal(enqueue.sent[0].outboxEnqueue.inserted, 1);
-  assert.equal(enqueue.sent[0].outboxEnqueue.queueDepth, 1);
+  assert.equal(enqueue.sent[0].outbox.result.inserted, 1);
+  assert.equal(enqueue.sent[0].outbox.result.queueDepth, 1);
   assert.equal(enqueue.statuses.at(-1).text, "1 queued");
 
   await harness.input(claim);
@@ -137,12 +137,12 @@ test("registers and exercises all outbox nodes", async () => {
   assert.equal(delivery.outbox.retryUntilExpired, true);
 
   await harness.input(settle, delivery);
-  assert.equal(settle.sent[0][0].outboxSettlement.state, "delivered");
+  assert.equal(settle.sent[0][0].outbox.result.state, "delivered");
   assert.equal(settle.sent[0][1], null);
   assert.equal(enqueue.statuses.at(-1).text, "0 queued");
 
   await harness.input(control);
-  assert.equal(control.sent[0].outboxControl.action, "status");
+  assert.equal(control.sent[0].outbox.result.action, "status");
   assert.equal(control.sent[0].payload.jobs[0].state, "delivered");
 
   await harness.close(enqueue);
@@ -181,17 +181,20 @@ test("settle sends non-retryable failures to its dead-letter output", async () =
   });
   await harness.input(claim);
   const message = claim.sent[0];
-  message.outboxError = "HTTP 400";
+  if (!message.outbox) message.outbox = {};
+  message.outbox.error = "HTTP 400";
   message.statusCode = 400;
   await harness.input(settle, message);
 
   assert.equal(settle.sent[0][0], null);
-  assert.equal(settle.sent[0][1].outboxSettlement.state, "dead");
+  assert.equal(settle.sent[0][1].outbox.result.state, "dead");
   assert.equal(config.store.listDeadLetters().length, 1);
 
   await harness.input(control, {
-    outboxAction: "requeue-one",
-    deadLetterId: message.outbox.id,
+    outbox: {
+      action: "requeue-one",
+      deadLetterId: message.outbox.id,
+    },
   });
   assert.equal(control.sent[0].payload.state, "pending");
   assert.equal(config.store.listDeadLetters().length, 0);
@@ -232,7 +235,7 @@ test("claim emits a bounded batch and control exposes lifecycle actions", async 
   for (const value of [1, 2, 3]) {
     await harness.input(enqueue, {
       payload: { value },
-      outboxJob: { dedupeKey: `node-batch-${value}` },
+      outbox: { dedupeKey: `node-batch-${value}` },
     });
   }
   await harness.input(claim);
@@ -243,18 +246,22 @@ test("claim emits a bounded batch and control exposes lifecycle actions", async 
   );
   await harness.input(settle, claim.sent[0]);
   await harness.input(control, {
-    outboxAction: "purge-delivered",
-    olderThanMs: 0,
-    limit: 1,
+    outbox: {
+      action: "purge-delivered",
+      olderThanMs: 0,
+      limit: 1,
+    },
   });
   assert.equal(control.sent[0].payload.purged, 1);
 
-  await harness.input(control, { outboxAction: "status" });
-  assert.equal(control.sent[1].outboxControl.sink, "postgres");
+  await harness.input(control, { outbox: { action: "status" } });
+  assert.equal(control.sent[1].outbox.result.sink, "postgres");
   assert.equal(typeof control.sent[1].payload.health.databaseBytes, "number");
   await harness.input(control, {
-    outboxAction: "maintenance",
-    checkpoint: false,
+    outbox: {
+      action: "maintenance",
+      checkpoint: false,
+    },
   });
   assert.equal(control.sent[2].payload.checkpoint, null);
 
@@ -292,7 +299,7 @@ test("batch claim preserves leases and batch settle partitions outcomes", async 
   for (const value of [1, 2, 3]) {
     await harness.input(enqueue, {
       payload: { value },
-      outboxJob: {
+      outbox: {
         dedupeKey: `batch-${value}`,
         maxAttempts: value === 1 ? 1 : 3,
       },
@@ -306,35 +313,35 @@ test("batch claim preserves leases and batch settle partitions outcomes", async 
     batch.payload.map(({ value }) => value).sort(),
     [1, 2, 3]
   );
-  assert.equal(batch.outboxBatch.length, 3);
+  assert.equal(batch.outbox.batch.length, 3);
   assert.equal(
-    batch.outboxBatch.every(
-      (outbox, index) =>
-        config.store.getJob(outbox.id).payload.value ===
+    batch.outbox.batch.every(
+      (lease, index) =>
+        config.store.getJob(lease.id).payload.value ===
         batch.payload[index].value
     ),
     true
   );
   assert.equal(
-    batch.outboxBatch.every(
-      (outbox) =>
-        typeof outbox.leaseToken === "string" &&
-        !Object.prototype.hasOwnProperty.call(outbox, "payload")
+    batch.outbox.batch.every(
+      (lease) =>
+        typeof lease.leaseToken === "string" &&
+        !Object.prototype.hasOwnProperty.call(lease, "payload")
     ),
     true
   );
 
-  batch.outboxCircuitFailure = true;
-  batch.outboxFailureClass = "postgres-connectivity";
-  batch.outboxError = "connection timed out";
+  batch.outbox.circuitFailure = true;
+  batch.outbox.failureClass = "postgres-connectivity";
+  batch.outbox.error = "connection timed out";
   await harness.input(settle, batch);
 
   const [active, dead] = settle.sent[0];
-  assert.equal(active.outboxBatch.length, 2);
-  assert.equal(dead.outboxBatch.length, 1);
-  assert.equal(active.outboxSettlements.retrying.length, 2);
-  assert.equal(active.outboxSettlements.dead.length, 1);
-  assert.equal(dead.outboxSettlements, active.outboxSettlements);
+  assert.equal(active.outbox.batch.length, 2);
+  assert.equal(dead.outbox.batch.length, 1);
+  assert.equal(active.outbox.result.retrying.length, 2);
+  assert.equal(active.outbox.result.dead.length, 1);
+  assert.equal(dead.outbox.result, active.outbox.result);
   assert.equal(
     config.store.getSinkControl("postgres").consecutiveFailures,
     1
@@ -364,7 +371,7 @@ test("fixed-sink enqueue rejects a mismatched durable sink key", async () => {
   await assert.rejects(
     harness.input(enqueue, {
       payload: { value: 1 },
-      outboxJob: { sink: "fieldkit" },
+      outbox: { sink: "fieldkit" },
     }),
     /does not match configured sink/
   );
@@ -401,15 +408,15 @@ test("settle uses circuit policy from the selected sink config", async () => {
   await harness.input(enqueue, { payload: { value: 1 } });
   await harness.input(claim);
   const message = claim.sent[0];
-  message.outboxFailureClass = "postgres-connectivity";
-  message.outboxCircuitFailure = true;
-  message.outboxError = "connection timed out";
+  message.outbox.failureClass = "postgres-connectivity";
+  message.outbox.circuitFailure = true;
+  message.outbox.error = "connection timed out";
   await harness.input(settle, message);
 
-  const control = config.store.getSinkControl("postgres");
-  assert.equal(settle.sent[0][0].outboxSettlement.state, "pending");
-  assert.equal(control.consecutiveFailures, 1);
-  assert.equal(control.pausedUntil > Date.now(), true);
+  const sinkControl = config.store.getSinkControl("postgres");
+  assert.equal(settle.sent[0][0].outbox.result.state, "pending");
+  assert.equal(sinkControl.consecutiveFailures, 1);
+  assert.equal(sinkControl.pausedUntil > Date.now(), true);
   await harness.close(claim);
   await harness.close(config);
 });
@@ -442,13 +449,13 @@ test("a disabled sink circuit breaker ignores circuit failures", async () => {
   await harness.input(enqueue, { payload: { value: 1 } });
   await harness.input(claim);
   const message = claim.sent[0];
-  message.outboxCircuitFailure = true;
-  message.outboxError = "connection timed out";
+  message.outbox.circuitFailure = true;
+  message.outbox.error = "connection timed out";
   await harness.input(settle, message);
 
-  const control = config.store.getSinkControl("postgres");
-  assert.equal(control.consecutiveFailures, 0);
-  assert.equal(control.pausedUntil, null);
+  const sinkControl = config.store.getSinkControl("postgres");
+  assert.equal(sinkControl.consecutiveFailures, 0);
+  assert.equal(sinkControl.pausedUntil, null);
   config.store.retryNow("postgres");
   await harness.input(claim);
   assert.equal(claim.sent.length, 2);
@@ -477,7 +484,7 @@ test("enqueue treats an array payload as one durable job", async () => {
   });
 
   await harness.input(enqueue, { payload: [{ value: 1 }, { value: 2 }] });
-  assert.equal(enqueue.sent[0].outboxEnqueue.inserted, 1);
+  assert.equal(enqueue.sent[0].outbox.result.inserted, 1);
   await harness.input(claim);
   assert.equal(claim.sent.length, 1);
   assert.deepEqual(claim.sent[0].payload, [{ value: 1 }, { value: 2 }]);

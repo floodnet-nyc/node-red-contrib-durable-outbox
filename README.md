@@ -22,7 +22,7 @@ Install the module and create three configuration nodes, then wire four nodes:
 3. **`outbox-enqueue`** — Select the sink config. Wire your data source into the input.
 4. **`outbox-claim`** — Select the same sink. Feed it a repeating Inject node (e.g. every 5s). Wire through your delivery node (e.g. a PostgreSQL upsert).
 5. **`outbox-settle`** — Select the same sink, set `Outcome: Success`. Wire the claim output (after your delivery node) into the settle input. The success path needs no message properties.
-6. On failure: add a Catch node scoped to your delivery node, wire through a Function node that sets `msg.outboxRetryable = true`, then into the same settle node. One settle node in `Success` mode handles both paths — the message property overrides the dropdown.
+6. On failure: add a Catch node scoped to your delivery node, wire through a Function node that sets `msg.outbox.retryable = true`, then into the same settle node. One settle node in `Success` mode handles both paths — the message property overrides the dropdown.
 
 That's it. See the [demo flows](#docker-compose-postgresql-demo) below for a complete working example with failure classification and control operations.
 
@@ -62,14 +62,14 @@ msg.payload = {
     observed_at: msg.timestamp,
     value_mm: msg.value
 };
-msg.outboxJob = {
+msg.outbox = {
     dedupeKey: `depth:${msg.dev_id}:${msg.timestamp}`
 };
 return msg;
 ```
 
 The selected sink config supplies the outbox, stable sink key, and retry
-defaults. Optional metadata and per-job overrides come from `msg.outboxJob` by
+defaults. Optional metadata and per-job overrides come from `msg.outbox` by
 default. Providing a different sink is rejected. Use a separate enqueue node
 and sink config for each logical destination.
 
@@ -119,15 +119,17 @@ Batch output mode emits one message for the complete claim:
         { /* first persisted payload */ },
         { /* second persisted payload */ }
     ],
-    outboxBatch: [
-        { id: "...", sink: "postgres", leaseToken: "...", attempts: 1 },
-        { id: "...", sink: "postgres", leaseToken: "...", attempts: 1 }
-    ]
+    outbox: {
+        batch: [
+            { id: "...", sink: "postgres", leaseToken: "...", attempts: 1 },
+            { id: "...", sink: "postgres", leaseToken: "...", attempts: 1 }
+        ]
+    }
 }
 ```
 
 The payload array can pass through one atomic PostgreSQL batch statement.
-`outboxBatch` preserves every corresponding lease and is passed unchanged to
+<code>msg.outbox.batch</code> preserves every corresponding lease and is passed unchanged to
 `outbox-settle`; no Batch, Join, packing, or fan-out nodes are required.
 
 An expired lease is eligible for recovery by another poll. Each new claim gets
@@ -143,29 +145,26 @@ again after the cooldown, and a successful delivery closes the circuit.
 Settles `msg.outbox.id` using the selected sink config. A message whose durable
 sink key does not match that config is rejected. Configure separate instances
 for success, retryable failure, or non-retryable failure. The configured
-outcome is the default, and <code>msg.outboxOutcome</code> /
-<code>msg.outboxRetryable</code> always override it:
+outcome is the default, and <code>msg.outbox.retryable</code> always overrides it:
 
 ```js
-msg.outboxRetryable = true;              // retry with backoff (overrides dropdown)
+msg.outbox.retryable = true;              // retry with backoff (overrides dropdown)
 ```
 
 A settle node set to <code>Success</code> handles both paths: the success
 wire needs no extra properties; the failure wire only needs
-<code>msg.outboxRetryable</code>. Set <code>msg.outboxOutcome</code> to
-<code>"success"</code> to force delivery regardless of the dropdown. Advanced
-users can override the derived circuit and failure class with
-<code>msg.outboxCircuitFailure</code>, <code>msg.outboxFailureClass</code>,
-<code>msg.outboxError</code>, and <code>msg.outboxStatus</code>.
+<code>msg.outbox.retryable</code>. Advanced users can override the derived
+circuit and failure class with <code>msg.outbox.circuitFailure</code>,
+<code>msg.outbox.failureClass</code>, and <code>msg.outbox.error</code>.
 
 The first output receives delivered jobs and scheduled retries. The second
 output receives jobs moved to the dead-letter table. A stale settlement is
-returned with `msg.outboxSettlement.state === "stale_lease"` and does not
+returned with `msg.outbox.result.state === "stale_lease"` and does not
 change the job or circuit state.
 
-When `msg.outboxBatch` is present, every preserved lease is settled. A failed
+When `msg.outbox.batch` is present, every preserved lease is settled. A failed
 database batch contributes at most one circuit failure, while retry and
-dead-letter decisions remain per job. `msg.outboxSettlements` groups the
+dead-letter decisions remain per job. `msg.outbox.result` groups the
 results into `delivered`, `retrying`, `dead`, and `stale` arrays. If a batch
 contains both retrying and dead jobs, the first output receives the active
 lease subset and the second receives the dead-letter subset.
@@ -178,8 +177,8 @@ second Outbox selector. An action can be fixed in the editor or supplied
 dynamically:
 
 ```js
-msg.outboxAction = "resume";
-msg.sink = "postgres";
+msg.outbox.action = "resume";
+msg.outbox.sink = "postgres";
 return msg;
 ```
 
@@ -193,11 +192,11 @@ Supported actions are:
 
 `resume` closes the sink circuit and makes all pending work immediately
 eligible. Results are returned in both `msg.payload` and
-`msg.outboxControl.result`.
+`msg.outbox.result`.
 
 `status`, `purge-delivered`, and `maintenance` operate on the selected sink's
 entire parent outbox. Dead-letter and retry controls default to the selected
-sink key; `msg.sink` can override that key within the same outbox.
+sink key; `msg.outbox.sink` can override that key within the same outbox.
 
 ## Tests
 
@@ -242,7 +241,7 @@ acknowledges it only after the upsert succeeds. Delivery uses
 `node-red-contrib-postgresql` 0.15.4 with an environment-configured connection
 pool and a parameterized `msg.query` / `msg.params` upsert. The
 `Durable PostgreSQL outbox demo` tab shows individual delivery. The
-`Batch outbox` tab claims one payload array with its `outboxBatch` leases,
+`Batch outbox` tab claims one payload array with its `msg.outbox.batch` leases,
 executes one PostgreSQL `unnest` upsert, and passes the batch directly to
 batch-aware settlement.
 
@@ -295,27 +294,27 @@ The same node can be driven dynamically by a Dashboard button, MQTT command,
 authenticated HTTP-In flow, or another operational workflow:
 
 ```js
-msg.outboxAction = "requeue-dead";
-msg.sink = "postgres-demo";
-msg.failureClass = "infrastructure";
-msg.limit = 1000;
+msg.outbox.action = "requeue-dead";
+msg.outbox.sink = "postgres-demo";
+msg.outbox.failureClass = "infrastructure";
+msg.outbox.limit = 1000;
 return msg;
 ```
 
 To replay one reviewed dead letter:
 
 ```js
-msg.outboxAction = "requeue-one";
-msg.deadLetterId = "the-job-id";
+msg.outbox.action = "requeue-one";
+msg.outbox.deadLetterId = "the-job-id";
 return msg;
 ```
 
 To purge at most 1,000 delivered records older than one day:
 
 ```js
-msg.outboxAction = "purge-delivered";
-msg.olderThanMs = 24 * 60 * 60 * 1000;
-msg.limit = 1000;
+msg.outbox.action = "purge-delivered";
+msg.outbox.olderThanMs = 24 * 60 * 60 * 1000;
+msg.outbox.limit = 1000;
 return msg;
 ```
 
@@ -323,8 +322,8 @@ After cleanup, checkpoint the WAL. Vacuum is opt-in because it can block
 ingestion:
 
 ```js
-msg.outboxAction = "maintenance";
-msg.vacuum = false;
+msg.outbox.action = "maintenance";
+msg.outbox.vacuum = false;
 return msg;
 ```
 

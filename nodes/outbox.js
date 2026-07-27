@@ -228,7 +228,7 @@ module.exports = function registerOutboxNodes(RED) {
           } else if (
             sinkConfig.circuitBreakerEnabled &&
             control.pausedUntil != null &&
-            control.pausedUntil > Date.now()
+            control.pausedUntil > sinkConfig.store.now()
           ) {
             node.status({
               fill: "yellow",
@@ -263,15 +263,18 @@ module.exports = function registerOutboxNodes(RED) {
     const configuredOutcome = config.outcome || "success";
 
     function resolveOutcome(msg) {
-      const success =
-        configuredOutcome === "success" ||
-        (configuredOutcome === "msg" && msg.outboxOutcome === "success");
-      const retryable =
-        configuredOutcome === "retry"
-          ? true
-          : configuredOutcome === "dead"
-            ? false
-            : msg.outboxRetryable !== false;
+      const success = configuredOutcome === "success"
+        || (configuredOutcome === "msg" && msg.outboxOutcome === "success");
+
+      let retryable;
+      if (configuredOutcome === "retry") {
+        retryable = true;
+      } else if (configuredOutcome === "dead") {
+        retryable = false;
+      } else {
+        retryable = msg.outboxRetryable !== false;
+      }
+
       const error =
         msg.outboxError ||
         msg.error ||
@@ -282,6 +285,7 @@ module.exports = function registerOutboxNodes(RED) {
       const failureClass =
         msg.outboxFailureClass ||
         (retryable ? "infrastructure" : "data");
+
       let circuitFailure = false;
       if (!success) {
         if (
@@ -296,14 +300,7 @@ module.exports = function registerOutboxNodes(RED) {
             ? failureClass === "infrastructure"
             : retryable);
       }
-      return {
-        success,
-        retryable,
-        error,
-        status,
-        failureClass,
-        circuitFailure,
-      };
+      return { success, retryable, error, status, failureClass, circuitFailure };
     }
 
     function validateOutbox(outbox) {

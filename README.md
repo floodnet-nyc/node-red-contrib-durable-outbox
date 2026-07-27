@@ -7,6 +7,25 @@ retry, expired-lease recovery, delivery retention, and dead-letter handling.
 The module requires Node.js 22 or newer because it uses the built-in
 `node:sqlite` API.
 
+## Quickstart
+
+Install the module and create three configuration nodes, then wire four nodes:
+
+```
+[Data Source] → [outbox-enqueue] → (original message emitted)
+[Inject 5s]  → [outbox-claim]  → [Your Deliver Node] → [outbox-settle (success)]
+[Catch]      → [Function]      → [outbox-settle (msg mode)]
+```
+
+1. **`durable-outbox-config`** — Set the database path, e.g. `/data/outbox/outbox.sqlite`.
+2. **`outbox-sink-config`** — Point to the config above, set a `Sink key` (e.g. `postgres-primary`), enable `retry-until-expired` for idempotent sinks.
+3. **`outbox-enqueue`** — Select the sink config. Wire your data source into the input.
+4. **`outbox-claim`** — Select the same sink. Feed it a repeating Inject node (e.g. every 5s).
+5. **`outbox-settle`** — Select the same sink, set `Outcome: Success`. Wire the claim output through your delivery node (e.g. a PostgreSQL upsert), then into settle.
+6. On failure: add a Catch node scoped to your delivery node, wire through a Function node that sets `msg.outboxOutcome = "failure"` and `msg.outboxRetryable = true`, then into a second `outbox-settle (msg mode)`.
+
+That's it. See the [demo flows](#docker-compose-postgresql-demo) below for a complete working example with failure classification and control operations.
+
 ## Nodes
 
 ### `durable-outbox-config`

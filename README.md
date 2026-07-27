@@ -18,33 +18,51 @@ The config node also bounds queue depth, encoded job size, and enqueue batch
 size. Its database-size threshold is reported as a health warning; it does not
 silently discard or reject already queued work.
 
+### `outbox-sink-config`
+
+Defines one logical delivery destination and references its durable outbox.
+It centralizes:
+
+- the stable persisted sink key;
+- lease duration, maximum in-flight jobs, and claim batch size;
+- attempt, age, and backoff defaults;
+- retry-until-expired behavior;
+- circuit-breaker threshold and cooldown.
+
+The SQLite job stores the configured sink key, such as `postgres-primary`, not
+the generated Node-RED config-node ID.
+
 ### `outbox-enqueue`
 
-Reads one job or an array of jobs from `msg.outboxJobs` by default and commits
-the complete array in one transaction. It emits the original message only
-after the commit succeeds.
+Persists `msg.payload` as one durable job and emits the original message only
+after the commit succeeds. The payload property is configurable.
 
 ```js
-msg.outboxJobs = {
-    sink: "postgres",
-    dedupeKey: `depth:${msg.dev_id}:${msg.timestamp}`,
-    payload: msg.payload,
-    schemaVersion: 1,
-    maxAttempts: 10,
-    retryUntilExpired: true,
-    maxAgeMs: 7 * 24 * 60 * 60 * 1000,
-    baseDelayMs: 2000,
-    maxDelayMs: 5 * 60 * 1000
+msg.payload = {
+    device_id: msg.dev_id,
+    observed_at: msg.timestamp,
+    value_mm: msg.value
+};
+msg.outboxJob = {
+    dedupeKey: `depth:${msg.dev_id}:${msg.timestamp}`
 };
 return msg;
 ```
 
-`dedupeKey` is optional. If omitted, the node hashes the sink and canonical
-payload. A duplicate enqueue returns the existing job instead of creating
-another one. JSON values, `Date`, and `Buffer` instances are preserved using a
-versioned encoding. Unsafe values such as circular references, functions,
-streams, and arbitrary class instances are rejected before the transaction
-commits.
+The selected sink config supplies the outbox, stable sink key, and retry
+defaults. Optional metadata and per-job overrides come from `msg.outboxJob` by
+default. Providing a different sink is rejected. Use a separate enqueue node
+and sink config for each logical destination.
+
+An array in `msg.payload` is stored as one job payload. Use a standard Split
+node before enqueue when each element should be persisted independently.
+
+`dedupeKey` is optional. If omitted, the node hashes the resolved sink and
+canonical payload. A duplicate enqueue returns the existing job instead of
+creating another one. JSON values, `Date`, and `Buffer` instances are preserved
+using a versioned encoding. Unsafe values such as circular references,
+functions, streams, and arbitrary class instances are rejected before the
+transaction commits.
 
 With `retryUntilExpired: true`, retryable infrastructure failures ignore the
 attempt count and remain active until `maxAgeMs`. Backoff is still bounded by
@@ -54,8 +72,8 @@ deliveries.
 ### `outbox-claim`
 
 Each input message leases a bounded batch of the oldest ready jobs for one
-sink. Configure the lease duration, claim batch, and maximum concurrent leases
-on the claim node. Use a standard repeating Inject node to set the polling
+sink. Lease duration, claim batch, and maximum concurrent leases come from the
+selected sink config. Use a standard repeating Inject node to set the polling
 interval and optionally trigger once when flows start. A poll fills only the
 remaining in-flight capacity.
 
@@ -79,13 +97,15 @@ a fresh lease token. Settlement requires that token, so a slow worker cannot
 settle a job after another worker has reclaimed it.
 
 After the configured number of consecutive infrastructure failures, claims
-for that sink pause for the circuit-breaker cooldown. The next claim after the
-cooldown is a half-open probe. A successful delivery closes the circuit.
+for that sink pause for the circuit-breaker cooldown. Claims become eligible
+again after the cooldown, and a successful delivery closes the circuit.
 
 ### `outbox-settle`
 
-Settles `msg.outbox.id`. Configure separate instances for success,
-retryable failure, or non-retryable failure. The dynamic mode reads:
+Settles `msg.outbox.id` using the selected sink config. A message whose durable
+sink key does not match that config is rejected. Configure separate instances
+for success, retryable failure, or non-retryable failure. The dynamic mode
+reads:
 
 ```js
 msg.outboxOutcome = "success"; // any other value means failure
@@ -102,8 +122,10 @@ change the job or circuit state.
 
 ### `outbox-control`
 
-Provides message-driven operations inside a normal Node-RED flow. An action
-can be fixed in the editor or supplied dynamically:
+Provides message-driven operations inside a normal Node-RED flow. The selected
+sink supplies both its stable key and parent outbox, so the node does not need a
+second Outbox selector. An action can be fixed in the editor or supplied
+dynamically:
 
 ```js
 msg.outboxAction = "resume";
@@ -122,6 +144,10 @@ Supported actions are:
 `resume` closes the sink circuit and makes all pending work immediately
 eligible. Results are returned in both `msg.payload` and
 `msg.outboxControl.result`.
+
+`status`, `purge-delivered`, and `maintenance` operate on the selected sink's
+entire parent outbox. Dead-letter and retry controls default to the selected
+sink key; `msg.sink` can override that key within the same outbox.
 
 ## Tests
 
@@ -149,7 +175,7 @@ The tests cover:
 - filtered bulk dead-letter replay;
 - SQL-filtered dead-letter listing;
 - bounded retention, deletion, health, and capacity controls;
-- registration and message behavior of all five Node-RED nodes.
+- registration and message behavior of all six Node-RED node types.
 
 ## Docker Compose PostgreSQL demo
 

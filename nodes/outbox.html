@@ -4,16 +4,6 @@
     defaults: {
       name: { value: "" },
       filename: { value: "/data/outbox/outbox.sqlite", required: true },
-      circuitBreakerThreshold: {
-        value: 3,
-        required: true,
-        validate: RED.validators.number()
-      },
-      circuitBreakerCooldownMs: {
-        value: 30000,
-        required: true,
-        validate: RED.validators.number()
-      },
       maxQueuedJobs: {
         value: 100000,
         required: true,
@@ -40,17 +30,56 @@
     }
   });
 
+  RED.nodes.registerType("outbox-sink-config", {
+    category: "config",
+    defaults: {
+      name: { value: "" },
+      outbox: { value: "", type: "durable-outbox-config", required: true },
+      sinkKey: { value: "", required: true },
+      leaseMs: { value: 60000, required: true, validate: RED.validators.number() },
+      maxInFlight: { value: 1, required: true, validate: RED.validators.number() },
+      batchSize: { value: 10, required: true, validate: RED.validators.number() },
+      maxAttempts: { value: 10, required: true, validate: RED.validators.number() },
+      retryUntilExpired: { value: false },
+      maxAgeMs: { value: 86400000, required: true, validate: RED.validators.number() },
+      baseDelayMs: { value: 2000, required: true, validate: RED.validators.number() },
+      maxDelayMs: { value: 300000, required: true, validate: RED.validators.number() },
+      circuitBreakerThreshold: {
+        value: 3,
+        required: true,
+        validate: RED.validators.number()
+      },
+      circuitBreakerCooldownMs: {
+        value: 30000,
+        required: true,
+        validate: RED.validators.number()
+      }
+    },
+    label: function () {
+      return this.name || this.sinkKey || "outbox sink";
+    }
+  });
+
   RED.nodes.registerType("outbox-enqueue", {
     category: "storage",
     color: "#C7E9C0",
     defaults: {
       name: { value: "" },
-      outbox: { value: "", type: "durable-outbox-config", required: true },
-      jobProperty: { value: "outboxJobs", required: true }
+      sink: { value: "", type: "outbox-sink-config", required: true },
+      payloadProperty: { value: "payload", required: true },
+      optionsProperty: { value: "outboxJob" }
     },
     inputs: 1,
     outputs: 1,
     icon: "font-awesome/fa-save",
+    oneditprepare: function () {
+      $("#node-input-payloadProperty").typedInput({
+        types: ["msg"]
+      });
+      $("#node-input-optionsProperty").typedInput({
+        types: ["msg"]
+      });
+    },
     label: function () {
       return this.name || "outbox enqueue";
     }
@@ -61,11 +90,7 @@
     color: "#C7E9C0",
     defaults: {
       name: { value: "" },
-      outbox: { value: "", type: "durable-outbox-config", required: true },
-      sink: { value: "", required: true },
-      leaseMs: { value: 60000, required: true, validate: RED.validators.number() },
-      maxInFlight: { value: 1, required: true, validate: RED.validators.number() },
-      batchSize: { value: 10, required: true, validate: RED.validators.number() }
+      sink: { value: "", type: "outbox-sink-config", required: true }
     },
     inputs: 1,
     outputs: 1,
@@ -80,7 +105,7 @@
     color: "#C7E9C0",
     defaults: {
       name: { value: "" },
-      outbox: { value: "", type: "durable-outbox-config", required: true },
+      sink: { value: "", type: "outbox-sink-config", required: true },
       outcome: { value: "success", required: true }
     },
     inputs: 1,
@@ -97,9 +122,8 @@
     color: "#C7E9C0",
     defaults: {
       name: { value: "" },
-      outbox: { value: "", type: "durable-outbox-config", required: true },
       action: { value: "status", required: true },
-      sink: { value: "" },
+      sink: { value: "", type: "outbox-sink-config", required: true },
       failureClass: { value: "" },
       limit: { value: 100, validate: RED.validators.number() },
       olderThanMs: { value: 86400000, validate: RED.validators.number() }
@@ -123,14 +147,6 @@
     <input type="text" id="node-config-input-filename">
   </div>
   <div class="form-row">
-    <label for="node-config-input-circuitBreakerThreshold">Circuit failures</label>
-    <input type="number" id="node-config-input-circuitBreakerThreshold">
-  </div>
-  <div class="form-row">
-    <label for="node-config-input-circuitBreakerCooldownMs">Cooldown (ms)</label>
-    <input type="number" id="node-config-input-circuitBreakerCooldownMs">
-  </div>
-  <div class="form-row">
     <label for="node-config-input-maxQueuedJobs">Maximum queued jobs</label>
     <input type="number" id="node-config-input-maxQueuedJobs">
   </div>
@@ -148,18 +164,79 @@
   </div>
 </script>
 
+<script type="text/html" data-template-name="outbox-sink-config">
+  <div class="form-row">
+    <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-config-input-name">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-outbox"><i class="fa fa-database"></i> Outbox</label>
+    <input type="text" id="node-config-input-outbox">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-sinkKey">Sink key</label>
+    <input type="text" id="node-config-input-sinkKey" placeholder="postgres-primary">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-leaseMs">Lease (ms)</label>
+    <input type="number" id="node-config-input-leaseMs">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-maxInFlight">Max in flight</label>
+    <input type="number" id="node-config-input-maxInFlight">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-batchSize">Claim batch</label>
+    <input type="number" id="node-config-input-batchSize">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-maxAttempts">Max attempts</label>
+    <input type="number" id="node-config-input-maxAttempts">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-retryUntilExpired">Retry until expired</label>
+    <input type="checkbox" id="node-config-input-retryUntilExpired"
+      style="display:inline-block; width:auto; vertical-align:top;">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-maxAgeMs">Maximum age (ms)</label>
+    <input type="number" id="node-config-input-maxAgeMs">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-baseDelayMs">Base delay (ms)</label>
+    <input type="number" id="node-config-input-baseDelayMs">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-maxDelayMs">Maximum delay (ms)</label>
+    <input type="number" id="node-config-input-maxDelayMs">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-circuitBreakerThreshold">Circuit failures</label>
+    <input type="number" id="node-config-input-circuitBreakerThreshold">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-circuitBreakerCooldownMs">Cooldown (ms)</label>
+    <input type="number" id="node-config-input-circuitBreakerCooldownMs">
+  </div>
+</script>
+
 <script type="text/html" data-template-name="outbox-enqueue">
   <div class="form-row">
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
     <input type="text" id="node-input-name">
   </div>
   <div class="form-row">
-    <label for="node-input-outbox"><i class="fa fa-database"></i> Outbox</label>
-    <input type="text" id="node-input-outbox">
+    <label for="node-input-sink">Sink</label>
+    <input type="text" id="node-input-sink">
   </div>
   <div class="form-row">
-    <label for="node-input-jobProperty">Job property</label>
-    <input type="text" id="node-input-jobProperty">
+    <label for="node-input-payloadProperty">Payload property</label>
+    <input type="text" id="node-input-payloadProperty">
+  </div>
+  <div class="form-row">
+    <label for="node-input-optionsProperty">Options property</label>
+    <input type="text" id="node-input-optionsProperty"
+      placeholder="outboxJob">
   </div>
 </script>
 
@@ -169,24 +246,8 @@
     <input type="text" id="node-input-name">
   </div>
   <div class="form-row">
-    <label for="node-input-outbox"><i class="fa fa-database"></i> Outbox</label>
-    <input type="text" id="node-input-outbox">
-  </div>
-  <div class="form-row">
     <label for="node-input-sink">Sink</label>
     <input type="text" id="node-input-sink">
-  </div>
-  <div class="form-row">
-    <label for="node-input-leaseMs">Lease (ms)</label>
-    <input type="number" id="node-input-leaseMs">
-  </div>
-  <div class="form-row">
-    <label for="node-input-maxInFlight">Max in flight</label>
-    <input type="number" id="node-input-maxInFlight">
-  </div>
-  <div class="form-row">
-    <label for="node-input-batchSize">Claim batch</label>
-    <input type="number" id="node-input-batchSize">
   </div>
 </script>
 
@@ -196,8 +257,8 @@
     <input type="text" id="node-input-name">
   </div>
   <div class="form-row">
-    <label for="node-input-outbox"><i class="fa fa-database"></i> Outbox</label>
-    <input type="text" id="node-input-outbox">
+    <label for="node-input-sink">Sink</label>
+    <input type="text" id="node-input-sink">
   </div>
   <div class="form-row">
     <label for="node-input-outcome">Outcome</label>
@@ -214,10 +275,6 @@
   <div class="form-row">
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
     <input type="text" id="node-input-name">
-  </div>
-  <div class="form-row">
-    <label for="node-input-outbox"><i class="fa fa-database"></i> Outbox</label>
-    <input type="text" id="node-input-outbox">
   </div>
   <div class="form-row">
     <label for="node-input-action">Action</label>
@@ -263,12 +320,31 @@
   </p>
 </script>
 
+<script type="text/html" data-help-name="outbox-sink-config">
+  <p>
+    Defines the stable routing key and delivery policy for one logical sink. The selected
+    outbox, lease duration, concurrency, claim batch, retry policy, and circuit-breaker policy
+    are shared by enqueue, claim, settle, and control nodes.
+  </p>
+  <p>
+    Jobs persist the <code>Sink key</code>, such as <code>postgres-primary</code>. They never
+    persist the generated Node-RED config-node ID, so queue records remain stable when flows
+    are exported or reorganized.
+  </p>
+</script>
+
 <script type="text/html" data-help-name="outbox-enqueue">
-  <p>Atomically persists one job or an array of jobs from the configured message property.</p>
-  <p>Each job requires <code>sink</code> and <code>payload</code>. Optional policy fields include
-  <code>dedupeKey</code>, <code>maxAttempts</code>, <code>maxAgeMs</code>,
-  <code>baseDelayMs</code>, <code>maxDelayMs</code>, and
-  <code>retryUntilExpired</code>.</p>
+  <p>Atomically persists one job from the configured payload property.</p>
+  <p>
+    By default, the persisted payload is <code>msg.payload</code>. Optional job metadata comes
+    from <code>msg.outboxJob</code>, including <code>dedupeKey</code>,
+    <code>schemaVersion</code>, or retry overrides. The outbox, stable sink key, and retry
+    defaults come from the sink config. A different sink value is rejected.
+  </p>
+  <p>
+    An array in <code>msg.payload</code> is one job payload. Use a Split node before enqueue
+    when each array element should become an independent job.
+  </p>
   <p>
     Plain JSON values, <code>Date</code>, and <code>Buffer</code> values are preserved.
     Undefined object properties are omitted and undefined array entries become null. Circular
@@ -278,15 +354,15 @@
 
 <script type="text/html" data-help-name="outbox-claim">
   <p>Each input message atomically leases a bounded batch of the oldest ready jobs for a sink.
-  Connect a repeating Inject node to schedule worker polls. The batch is limited by both
-  <code>Claim batch</code> and remaining <code>Max in flight</code> capacity.</p>
+  Connect a repeating Inject node to schedule worker polls. Lease duration, claim batch, and
+  maximum in-flight capacity come from the selected sink config.</p>
 </script>
 
 <script type="text/html" data-help-name="outbox-settle">
-  <p>Marks a leased job delivered, schedules a bounded retry, or moves it atomically to the
-  dead-letter table. Set <code>msg.outboxFailureClass</code> to
-  <code>infrastructure</code> to participate in circuit breaking. The second output receives
-  dead-lettered jobs.</p>
+  <p>Marks a leased job for the selected sink delivered, schedules a bounded retry, or moves it
+  atomically to the dead-letter table. A mismatched job sink is rejected. Set
+  <code>msg.outboxFailureClass</code> to <code>infrastructure</code> to participate in the sink
+  config's circuit breaker. The second output receives dead-lettered jobs.</p>
   <p>
     Settlement is fenced by the lease token in <code>msg.outbox.leaseToken</code>. A worker
     whose lease expired cannot settle a newer worker's claim; its result is
@@ -297,8 +373,10 @@
 <script type="text/html" data-help-name="outbox-control">
   <p>
     Provides message-driven operational control over an outbox. Select a fixed action in the
-    editor, or select <code>msg</code> and set <code>msg.outboxAction</code> at runtime.
-    Message properties override the values configured in the editor.
+    editor, or select <code>msg</code> and set <code>msg.outboxAction</code> at runtime. The
+    selected sink supplies both the default sink key and its parent outbox. Outbox-wide actions
+    such as status, retention, and maintenance operate on that parent outbox. Message
+    properties override the configured sink key.
   </p>
 
   <h3>Inputs</h3>
@@ -376,15 +454,15 @@
 
     <dt><code>list-dead</code></dt>
     <dd>
-      Returns dead-letter jobs, optionally filtered by sink and failure class, up to
-      <code>limit</code>. This action does not modify the queue.
+      Returns dead-letter jobs for the selected or message-overridden sink, optionally filtered
+      by failure class, up to <code>limit</code>. This action does not modify the queue.
     </dd>
 
     <dt><code>requeue-dead</code></dt>
     <dd>
       Atomically moves matching dead letters back to the pending queue and resets their attempt
-      count. Sink and failure class are optional filters. If both are omitted, the action
-      requeues up to <code>limit</code> dead letters from all sinks.
+      count. Jobs are restricted to the selected or message-overridden sink and may also be
+      filtered by failure class.
     </dd>
 
     <dt><code>requeue-one</code></dt>
@@ -395,8 +473,9 @@
 
     <dt><code>delete-dead</code></dt>
     <dd>
-      Permanently deletes a bounded number of dead letters matching the optional sink and
-      failure-class filters. This cannot be undone; review with <code>list-dead</code> first.
+      Permanently deletes a bounded number of dead letters matching the selected or
+      message-overridden sink and optional failure-class filter. This cannot be undone; review
+      with <code>list-dead</code> first.
     </dd>
 
     <dt><code>purge-delivered</code></dt>

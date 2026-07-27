@@ -6,10 +6,6 @@ module.exports = function registerOutboxNodes(RED) {
   function DurableOutboxConfigNode(config) {
     RED.nodes.createNode(this, config);
     this.filename = config.filename;
-    this.circuitBreakerThreshold =
-      Number(config.circuitBreakerThreshold) || 3;
-    this.circuitBreakerCooldownMs =
-      Number(config.circuitBreakerCooldownMs) || 30_000;
     const storeOptions = {
       maxQueuedJobs: config.maxQueuedJobs,
       maxJobBytes: config.maxJobBytes,
@@ -33,7 +29,7 @@ module.exports = function registerOutboxNodes(RED) {
     });
   }
 
-  function getConfigNode(runtimeNode, id) {
+  function getOutboxConfigNode(runtimeNode, id) {
     const configNode = RED.nodes.getNode(id);
     if (!configNode?.store) {
       runtimeNode.status({ fill: "red", shape: "ring", text: "not configured" });
@@ -42,21 +38,100 @@ module.exports = function registerOutboxNodes(RED) {
     return configNode;
   }
 
+  function positiveNumber(value, fallback) {
+    return Math.max(1, Number(value) || fallback);
+  }
+
+  function OutboxSinkConfigNode(config) {
+    RED.nodes.createNode(this, config);
+    const outboxConfig = getOutboxConfigNode(this, config.outbox);
+    const sinkKey = String(config.sinkKey || "").trim();
+    if (!sinkKey) throw new Error("A stable sink key is required");
+
+    this.outbox = config.outbox;
+    this.outboxConfig = outboxConfig;
+    this.store = outboxConfig.store;
+    this.sinkKey = sinkKey;
+    this.leaseMs = positiveNumber(config.leaseMs, 60_000);
+    this.maxInFlight = positiveNumber(config.maxInFlight, 1);
+    this.batchSize = positiveNumber(config.batchSize, 10);
+    this.maxAttempts = positiveNumber(config.maxAttempts, 10);
+    this.retryUntilExpired =
+      config.retryUntilExpired === true ||
+      config.retryUntilExpired === "true";
+    this.maxAgeMs = positiveNumber(config.maxAgeMs, 86_400_000);
+    this.baseDelayMs = positiveNumber(config.baseDelayMs, 2_000);
+    this.maxDelayMs = positiveNumber(config.maxDelayMs, 300_000);
+    this.circuitBreakerThreshold = positiveNumber(
+      config.circuitBreakerThreshold,
+      3
+    );
+    this.circuitBreakerCooldownMs = positiveNumber(
+      config.circuitBreakerCooldownMs,
+      30_000
+    );
+  }
+
+  function getSinkConfigNode(runtimeNode, id, expectedOutbox) {
+    const sinkConfig = RED.nodes.getNode(id);
+    if (!sinkConfig?.store || !sinkConfig?.sinkKey) {
+      runtimeNode.status({ fill: "red", shape: "ring", text: "no sink" });
+      throw new Error("A valid outbox sink configuration is required");
+    }
+    if (
+      expectedOutbox &&
+      sinkConfig.outboxConfig !== expectedOutbox
+    ) {
+      throw new Error("The sink and node must use the same durable outbox");
+    }
+    return sinkConfig;
+  }
+
   function OutboxEnqueueNode(config) {
     RED.nodes.createNode(this, config);
     const node = this;
-    const configNode = getConfigNode(node, config.outbox);
-    const jobProperty = config.jobProperty || "outboxJobs";
+    const sinkConfig = getSinkConfigNode(node, config.sink);
+    const payloadProperty = config.payloadProperty || "payload";
+    const optionsProperty = config.optionsProperty || "outboxJob";
 
     node.on("input", (msg, send, done) => {
       send = send || node.send.bind(node);
       try {
-        const jobs = RED.util.getMessageProperty(msg, jobProperty);
-        if (jobs == null) {
-          throw new Error(`msg.${jobProperty} does not contain an outbox job`);
+        const payload = RED.util.getMessageProperty(msg, payloadProperty);
+        if (payload === undefined) {
+          throw new Error(
+            `msg.${payloadProperty} does not contain an outbox payload`
+          );
         }
-        const results = configNode.store.enqueue(jobs);
+        const options = optionsProperty
+          ? RED.util.getMessageProperty(msg, optionsProperty)
+          : undefined;
+        if (
+          options != null &&
+          (typeof options !== "object" || Array.isArray(options))
+        ) {
+          throw new TypeError(
+            `msg.${optionsProperty} must be an object when provided`
+          );
+        }
+        if (options?.sink != null && options.sink !== sinkConfig.sinkKey) {
+          throw new Error(
+            `Job sink ${options.sink} does not match configured sink ${sinkConfig.sinkKey}`
+          );
+        }
+        const job = {
+          maxAttempts: sinkConfig.maxAttempts,
+          retryUntilExpired: sinkConfig.retryUntilExpired,
+          maxAgeMs: sinkConfig.maxAgeMs,
+          baseDelayMs: sinkConfig.baseDelayMs,
+          maxDelayMs: sinkConfig.maxDelayMs,
+          ...(options || {}),
+          sink: sinkConfig.sinkKey,
+          payload,
+        };
+        const results = sinkConfig.store.enqueue(job);
         msg.outboxEnqueue = {
+          sink: sinkConfig.sinkKey,
           jobs: results,
           inserted: results.filter((job) => job.inserted).length,
           duplicates: results.filter((job) => !job.inserted).length,
@@ -78,15 +153,13 @@ module.exports = function registerOutboxNodes(RED) {
   function OutboxClaimNode(config) {
     RED.nodes.createNode(this, config);
     const node = this;
-    const configNode = getConfigNode(node, config.outbox);
-    const sink = config.sink;
-    const leaseMs = Number(config.leaseMs) || 60_000;
-    const maxInFlight = Number(config.maxInFlight) || 1;
-    const batchSize = Number(config.batchSize) || 10;
+    const sinkConfig = getSinkConfigNode(node, config.sink);
+    const { store, sinkKey: sink, leaseMs, maxInFlight, batchSize } =
+      sinkConfig;
 
     function claim(send, done) {
       try {
-        const jobs = configNode.store.claimBatch({
+        const jobs = store.claimBatch({
           sink,
           leaseMs,
           maxInFlight,
@@ -106,7 +179,7 @@ module.exports = function registerOutboxNodes(RED) {
             });
           }
         } else {
-          const control = configNode.store.getSinkControl(sink);
+          const control = store.getSinkControl(sink);
           if (control.manuallyPaused) {
             node.status({ fill: "yellow", shape: "dot", text: "paused" });
           } else if (
@@ -142,7 +215,7 @@ module.exports = function registerOutboxNodes(RED) {
   function OutboxSettleNode(config) {
     RED.nodes.createNode(this, config);
     const node = this;
-    const configNode = getConfigNode(node, config.outbox);
+    const sinkConfig = getSinkConfigNode(node, config.sink);
     const configuredOutcome = config.outcome || "success";
 
     node.on("input", (msg, send, done) => {
@@ -150,6 +223,11 @@ module.exports = function registerOutboxNodes(RED) {
       try {
         const id = msg.outbox?.id;
         if (!id) throw new Error("msg.outbox.id is required to settle a job");
+        if (msg.outbox.sink !== sinkConfig.sinkKey) {
+          throw new Error(
+            `Job sink ${msg.outbox.sink} does not match configured sink ${sinkConfig.sinkKey}`
+          );
+        }
 
         const success =
           configuredOutcome === "success" ||
@@ -171,15 +249,15 @@ module.exports = function registerOutboxNodes(RED) {
           msg.outboxFailureClass ||
           (retryable ? "infrastructure" : "data");
 
-        const result = configNode.store.settle(id, {
+        const result = sinkConfig.store.settle(id, {
           leaseToken: msg.outbox.leaseToken,
           success,
           retryable,
           error,
           status,
           failureClass,
-          circuitBreakerThreshold: configNode.circuitBreakerThreshold,
-          circuitBreakerCooldownMs: configNode.circuitBreakerCooldownMs,
+          circuitBreakerThreshold: sinkConfig.circuitBreakerThreshold,
+          circuitBreakerCooldownMs: sinkConfig.circuitBreakerCooldownMs,
         });
         msg.outboxSettlement = result;
 
@@ -211,13 +289,14 @@ module.exports = function registerOutboxNodes(RED) {
   function OutboxControlNode(config) {
     RED.nodes.createNode(this, config);
     const node = this;
-    const configNode = getConfigNode(node, config.outbox);
+    const sinkConfig = getSinkConfigNode(node, config.sink);
+    const store = sinkConfig.store;
 
     node.on("input", (msg, send, done) => {
       send = send || node.send.bind(node);
       try {
         const action = msg.outboxAction || config.action || "status";
-        const sink = msg.sink || config.sink || undefined;
+        const sink = msg.sink || sinkConfig.sinkKey;
         const failureClass =
           msg.failureClass || config.failureClass || undefined;
         const limit = Number(msg.limit ?? config.limit) || 100;
@@ -232,22 +311,22 @@ module.exports = function registerOutboxNodes(RED) {
 
         switch (action) {
           case "status":
-            result = configNode.store.stats();
+            result = store.stats();
             break;
           case "pause":
             if (!sink) throw new Error("A sink is required to pause");
-            result = configNode.store.pauseSink(sink);
+            result = store.pauseSink(sink);
             break;
           case "resume":
             if (!sink) throw new Error("A sink is required to resume");
-            result = configNode.store.resumeSink(sink, { retryNow: true });
+            result = store.resumeSink(sink, { retryNow: true });
             break;
           case "retry-now":
             if (!sink) throw new Error("A sink is required to retry jobs");
-            result = configNode.store.retryNow(sink);
+            result = store.retryNow(sink);
             break;
           case "list-dead": {
-            const rows = configNode.store.listDeadLetters({
+            const rows = store.listDeadLetters({
               sink,
               failureClass,
               limit,
@@ -256,7 +335,7 @@ module.exports = function registerOutboxNodes(RED) {
             break;
           }
           case "requeue-dead":
-            result = configNode.store.requeueDeadLetters({
+            result = store.requeueDeadLetters({
               sink,
               failureClass,
               limit,
@@ -268,23 +347,23 @@ module.exports = function registerOutboxNodes(RED) {
                 "msg.deadLetterId, msg.outbox.id, or msg.id is required"
               );
             }
-            result = configNode.store.requeueDeadLetter(id);
+            result = store.requeueDeadLetter(id);
             break;
           case "delete-dead":
-            result = configNode.store.deleteDeadLetters({
+            result = store.deleteDeadLetters({
               sink,
               failureClass,
               limit,
             });
             break;
           case "purge-delivered":
-            result = configNode.store.purgeDelivered({
+            result = store.purgeDelivered({
               olderThanMs,
               limit,
             });
             break;
           case "maintenance":
-            result = configNode.store.maintenance({
+            result = store.maintenance({
               checkpoint: msg.checkpoint !== false,
               vacuum: msg.vacuum === true,
             });
@@ -314,6 +393,7 @@ module.exports = function registerOutboxNodes(RED) {
   }
 
   RED.nodes.registerType("durable-outbox-config", DurableOutboxConfigNode);
+  RED.nodes.registerType("outbox-sink-config", OutboxSinkConfigNode);
   RED.nodes.registerType("outbox-enqueue", OutboxEnqueueNode);
   RED.nodes.registerType("outbox-claim", OutboxClaimNode);
   RED.nodes.registerType("outbox-settle", OutboxSettleNode);

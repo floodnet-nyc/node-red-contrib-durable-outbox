@@ -95,7 +95,6 @@ test("registers and exercises all outbox nodes", async () => {
     id: "claim",
     outbox: "outbox",
     sink: "postgres",
-    intervalMs: 0,
     leaseMs: 60_000,
     maxInFlight: 1,
   });
@@ -149,7 +148,6 @@ test("settle sends non-retryable failures to its dead-letter output", async () =
   const claim = harness.instantiate("outbox-claim", {
     outbox: "outbox",
     sink: "fieldkit",
-    intervalMs: 0,
   });
   const settle = harness.instantiate("outbox-settle", {
     outbox: "outbox",
@@ -197,7 +195,6 @@ test("claim emits a bounded batch and control exposes lifecycle actions", async 
   const claim = harness.instantiate("outbox-claim", {
     outbox: "outbox",
     sink: "postgres",
-    intervalMs: 0,
     leaseMs: 60_000,
     maxInFlight: 3,
     batchSize: 2,

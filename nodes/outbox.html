@@ -63,7 +63,6 @@
       name: { value: "" },
       outbox: { value: "", type: "durable-outbox-config", required: true },
       sink: { value: "", required: true },
-      intervalMs: { value: 1000, required: true, validate: RED.validators.number() },
       leaseMs: { value: 60000, required: true, validate: RED.validators.number() },
       maxInFlight: { value: 1, required: true, validate: RED.validators.number() },
       batchSize: { value: 10, required: true, validate: RED.validators.number() }
@@ -178,10 +177,6 @@
     <input type="text" id="node-input-sink">
   </div>
   <div class="form-row">
-    <label for="node-input-intervalMs">Poll (ms)</label>
-    <input type="number" id="node-input-intervalMs">
-  </div>
-  <div class="form-row">
     <label for="node-input-leaseMs">Lease (ms)</label>
     <input type="number" id="node-input-leaseMs">
   </div>
@@ -282,8 +277,8 @@
 </script>
 
 <script type="text/html" data-help-name="outbox-claim">
-  <p>Atomically leases a bounded batch of the oldest ready jobs for a sink. It can poll
-  automatically and can also be triggered by any input message. The batch is limited by both
+  <p>Each input message atomically leases a bounded batch of the oldest ready jobs for a sink.
+  Connect a repeating Inject node to schedule worker polls. The batch is limited by both
   <code>Claim batch</code> and remaining <code>Max in flight</code> capacity.</p>
 </script>
 

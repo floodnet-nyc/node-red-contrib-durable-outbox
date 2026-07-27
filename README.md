@@ -53,10 +53,11 @@ deliveries.
 
 ### `outbox-claim`
 
-Leases a bounded batch of the oldest ready jobs for one sink. Configure an
-automatic polling interval, lease duration, claim batch, and maximum concurrent
-leases. A poll fills only the remaining in-flight capacity. Any input message
-also triggers a poll.
+Each input message leases a bounded batch of the oldest ready jobs for one
+sink. Configure the lease duration, claim batch, and maximum concurrent leases
+on the claim node. Use a standard repeating Inject node to set the polling
+interval and optionally trigger once when flows start. A poll fills only the
+remaining in-flight capacity.
 
 The output has this shape:
 

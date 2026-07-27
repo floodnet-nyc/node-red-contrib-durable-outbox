@@ -83,8 +83,6 @@ module.exports = function registerOutboxNodes(RED) {
     const leaseMs = Number(config.leaseMs) || 60_000;
     const maxInFlight = Number(config.maxInFlight) || 1;
     const batchSize = Number(config.batchSize) || 10;
-    const intervalMs = Math.max(0, Number(config.intervalMs) || 0);
-    let timer = null;
 
     function claim(send, done) {
       try {
@@ -136,14 +134,7 @@ module.exports = function registerOutboxNodes(RED) {
       claim(send || node.send.bind(node), done);
     });
 
-    if (intervalMs > 0) {
-      timer = setInterval(() => claim(node.send.bind(node)), intervalMs);
-      timer.unref?.();
-      setImmediate(() => claim(node.send.bind(node)));
-    }
-
     node.on("close", (removed, done) => {
-      if (timer) clearInterval(timer);
       done();
     });
   }

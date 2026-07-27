@@ -3,14 +3,21 @@
 const { OutboxStore } = require("../lib/outbox-store");
 
 module.exports = function registerOutboxNodes(RED) {
+  function megabytesToBytes(value, fallbackMb) {
+    const megabytes = Number(value);
+    const normalized =
+      Number.isFinite(megabytes) && megabytes > 0 ? megabytes : fallbackMb;
+    return Math.max(1, Math.round(normalized * 1_048_576));
+  }
+
   function DurableOutboxConfigNode(config) {
     RED.nodes.createNode(this, config);
     this.filename = config.filename;
     const storeOptions = {
       maxQueuedJobs: config.maxQueuedJobs,
-      maxJobBytes: config.maxJobBytes,
+      maxJobBytes: megabytesToBytes(config.maxJobMb, 1),
       maxEnqueueBatch: config.maxEnqueueBatch,
-      maxDatabaseBytes: config.maxDatabaseBytes,
+      maxDatabaseBytes: megabytesToBytes(config.maxDatabaseMb, 1_024),
     };
     try {
       this.store = new OutboxStore(this.filename, storeOptions);
@@ -62,6 +69,9 @@ module.exports = function registerOutboxNodes(RED) {
     this.maxAgeMs = positiveNumber(config.maxAgeMs, 86_400_000);
     this.baseDelayMs = positiveNumber(config.baseDelayMs, 2_000);
     this.maxDelayMs = positiveNumber(config.maxDelayMs, 300_000);
+    this.circuitBreakerEnabled =
+      config.circuitBreakerEnabled !== false &&
+      config.circuitBreakerEnabled !== "false";
     this.circuitBreakerThreshold = positiveNumber(
       config.circuitBreakerThreshold,
       3
@@ -183,6 +193,7 @@ module.exports = function registerOutboxNodes(RED) {
           leaseMs,
           maxInFlight,
           batchSize,
+          circuitBreakerEnabled: sinkConfig.circuitBreakerEnabled,
         });
         sinkConfig.notifyQueueDepth();
         if (jobs.length) {
@@ -203,6 +214,7 @@ module.exports = function registerOutboxNodes(RED) {
           if (control.manuallyPaused) {
             node.status({ fill: "yellow", shape: "dot", text: "paused" });
           } else if (
+            sinkConfig.circuitBreakerEnabled &&
             control.pausedUntil != null &&
             control.pausedUntil > Date.now()
           ) {
@@ -276,11 +288,7 @@ module.exports = function registerOutboxNodes(RED) {
           ) {
             throw new TypeError("msg.outboxCircuitFailure must be a boolean");
           }
-          circuitFailure =
-            msg.outboxCircuitFailure ??
-            (msg.outboxFailureClass
-              ? failureClass === "infrastructure"
-              : retryable);
+          circuitFailure = msg.outboxCircuitFailure ?? retryable !== false;
         }
 
         const result = sinkConfig.store.settle(id, {
@@ -290,7 +298,8 @@ module.exports = function registerOutboxNodes(RED) {
           error,
           status,
           failureClass,
-          circuitFailure,
+          circuitFailure:
+            sinkConfig.circuitBreakerEnabled && circuitFailure,
           circuitBreakerThreshold: sinkConfig.circuitBreakerThreshold,
           circuitBreakerCooldownMs: sinkConfig.circuitBreakerCooldownMs,
         });

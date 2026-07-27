@@ -9,8 +9,8 @@
         required: true,
         validate: RED.validators.number()
       },
-      maxJobBytes: {
-        value: 1048576,
+      maxJobMb: {
+        value: 1,
         required: true,
         validate: RED.validators.number()
       },
@@ -19,8 +19,8 @@
         required: true,
         validate: RED.validators.number()
       },
-      maxDatabaseBytes: {
-        value: 1073741824,
+      maxDatabaseMb: {
+        value: 1024,
         required: true,
         validate: RED.validators.number()
       }
@@ -40,10 +40,11 @@
       maxInFlight: { value: 1, required: true, validate: RED.validators.number() },
       batchSize: { value: 10, required: true, validate: RED.validators.number() },
       maxAttempts: { value: 10, required: true, validate: RED.validators.number() },
-      retryUntilExpired: { value: false },
+      retryUntilExpired: { value: "false" },
       maxAgeMs: { value: 86400000, required: true, validate: RED.validators.number() },
       baseDelayMs: { value: 2000, required: true, validate: RED.validators.number() },
       maxDelayMs: { value: 300000, required: true, validate: RED.validators.number() },
+      circuitBreakerEnabled: { value: true },
       circuitBreakerThreshold: {
         value: 3,
         required: true,
@@ -54,6 +55,38 @@
         required: true,
         validate: RED.validators.number()
       }
+    },
+    oneditprepare: function () {
+      const retryUntilExpired =
+        this.retryUntilExpired === true ||
+        this.retryUntilExpired === "true";
+      $("#node-config-input-retryUntilExpired").val(
+        retryUntilExpired ? "true" : "false"
+      );
+
+      const updatePolicyVisibility = function () {
+        const retryUntilExpired =
+          $("#node-config-input-retryUntilExpired").val() === "true";
+        const circuitBreakerEnabled =
+          $("#node-config-input-circuitBreakerEnabled").prop("checked");
+
+        $(".outbox-sink-max-attempts-row").toggle(!retryUntilExpired);
+        $(".outbox-sink-circuit-setting-row").toggle(circuitBreakerEnabled);
+      };
+
+      $("#node-config-input-retryUntilExpired")
+        .on("change.outboxSink", updatePolicyVisibility);
+      $("#node-config-input-circuitBreakerEnabled")
+        .on("change.outboxSink", updatePolicyVisibility);
+      updatePolicyVisibility();
+    },
+    oneditsave: function () {
+      $("#node-config-input-retryUntilExpired").off(".outboxSink");
+      $("#node-config-input-circuitBreakerEnabled").off(".outboxSink");
+    },
+    oneditcancel: function () {
+      $("#node-config-input-retryUntilExpired").off(".outboxSink");
+      $("#node-config-input-circuitBreakerEnabled").off(".outboxSink");
     },
     label: function () {
       return this.name || this.sinkKey || "outbox sink";
@@ -182,16 +215,16 @@
     <input type="number" id="node-config-input-maxQueuedJobs">
   </div>
   <div class="form-row">
-    <label for="node-config-input-maxJobBytes">Maximum job bytes</label>
-    <input type="number" id="node-config-input-maxJobBytes">
+    <label for="node-config-input-maxJobMb">Maximum job size (MB)</label>
+    <input type="number" id="node-config-input-maxJobMb" min="0.001" step="any">
   </div>
   <div class="form-row">
     <label for="node-config-input-maxEnqueueBatch">Maximum enqueue batch</label>
     <input type="number" id="node-config-input-maxEnqueueBatch">
   </div>
   <div class="form-row">
-    <label for="node-config-input-maxDatabaseBytes">DB warning bytes</label>
-    <input type="number" id="node-config-input-maxDatabaseBytes">
+    <label for="node-config-input-maxDatabaseMb">DB warning size (MB)</label>
+    <input type="number" id="node-config-input-maxDatabaseMb" min="0.001" step="any">
   </div>
 </script>
 
@@ -199,6 +232,10 @@
   <div class="form-row">
     <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
     <input type="text" id="node-config-input-name">
+  </div>
+
+  <div class="form-row">
+    <h4><i class="fa fa-map-marker"></i> Identity</h4>
   </div>
   <div class="form-row">
     <label for="node-config-input-outbox"><i class="fa fa-database"></i> Outbox</label>
@@ -208,44 +245,63 @@
     <label for="node-config-input-sinkKey">Sink key</label>
     <input type="text" id="node-config-input-sinkKey" placeholder="postgres-primary">
   </div>
+
   <div class="form-row">
-    <label for="node-config-input-leaseMs">Lease (ms)</label>
+    <h4><i class="fa fa-tasks"></i> Worker capacity</h4>
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-leaseMs">Lease timeout (ms)</label>
     <input type="number" id="node-config-input-leaseMs">
   </div>
   <div class="form-row">
-    <label for="node-config-input-maxInFlight">Max in flight</label>
+    <label for="node-config-input-maxInFlight">Maximum in flight</label>
     <input type="number" id="node-config-input-maxInFlight">
   </div>
   <div class="form-row">
-    <label for="node-config-input-batchSize">Claim batch</label>
+    <label for="node-config-input-batchSize">Claim batch size</label>
     <input type="number" id="node-config-input-batchSize">
   </div>
+
   <div class="form-row">
-    <label for="node-config-input-maxAttempts">Max attempts</label>
-    <input type="number" id="node-config-input-maxAttempts">
+    <h4><i class="fa fa-refresh"></i> Retry lifecycle</h4>
   </div>
   <div class="form-row">
-    <label for="node-config-input-retryUntilExpired">Retry until expired</label>
-    <input type="checkbox" id="node-config-input-retryUntilExpired"
-      style="display:inline-block; width:auto; vertical-align:top;">
+    <label for="node-config-input-retryUntilExpired">Retry mode</label>
+    <select id="node-config-input-retryUntilExpired">
+      <option value="false">Bounded attempts</option>
+      <option value="true">Until maximum age</option>
+    </select>
+  </div>
+  <div class="form-row outbox-sink-max-attempts-row">
+    <label for="node-config-input-maxAttempts">Maximum attempts</label>
+    <input type="number" id="node-config-input-maxAttempts">
   </div>
   <div class="form-row">
     <label for="node-config-input-maxAgeMs">Maximum age (ms)</label>
     <input type="number" id="node-config-input-maxAgeMs">
   </div>
   <div class="form-row">
-    <label for="node-config-input-baseDelayMs">Base delay (ms)</label>
+    <label for="node-config-input-baseDelayMs">Initial delay (ms)</label>
     <input type="number" id="node-config-input-baseDelayMs">
   </div>
   <div class="form-row">
-    <label for="node-config-input-maxDelayMs">Maximum delay (ms)</label>
+    <label for="node-config-input-maxDelayMs">Maximum retry delay (ms)</label>
     <input type="number" id="node-config-input-maxDelayMs">
   </div>
+
   <div class="form-row">
-    <label for="node-config-input-circuitBreakerThreshold">Circuit failures</label>
-    <input type="number" id="node-config-input-circuitBreakerThreshold">
+    <h4><i class="fa fa-bolt"></i> Circuit breaker</h4>
   </div>
   <div class="form-row">
+    <label for="node-config-input-circuitBreakerEnabled">Enabled</label>
+    <input type="checkbox" id="node-config-input-circuitBreakerEnabled"
+      style="display:inline-block; width:auto; vertical-align:top;">
+  </div>
+  <div class="form-row outbox-sink-circuit-setting-row">
+    <label for="node-config-input-circuitBreakerThreshold">Failure threshold</label>
+    <input type="number" id="node-config-input-circuitBreakerThreshold">
+  </div>
+  <div class="form-row outbox-sink-circuit-setting-row">
     <label for="node-config-input-circuitBreakerCooldownMs">Cooldown (ms)</label>
     <input type="number" id="node-config-input-circuitBreakerCooldownMs">
   </div>
@@ -346,8 +402,8 @@
   <p>Owns a durable SQLite outbox database shared by the other outbox nodes.</p>
   <p>
     Queue depth, job size, and enqueue batch limits reject oversized writes atomically. The
-    database byte setting is a warning threshold reported by <code>status</code>; it does not
-    delete or reject jobs.
+    database size setting is a warning threshold reported by <code>status</code>; it does not
+    delete or reject jobs. Size fields use MB, where one MB is 1,048,576 bytes.
   </p>
 </script>
 
@@ -355,7 +411,9 @@
   <p>
     Defines the stable routing key and delivery policy for one logical sink. The selected
     outbox, lease duration, concurrency, claim batch, retry policy, and circuit-breaker policy
-    are shared by enqueue, claim, settle, and control nodes.
+    are shared by enqueue, claim, settle, and control nodes. Retry mode controls whether jobs
+    stop at the attempt bound or continue until their maximum age. A disabled circuit breaker
+    ignores automatic circuit pauses while manual pauses still apply.
   </p>
   <p>
     Jobs persist the <code>Sink key</code>, such as <code>postgres-primary</code>. They never

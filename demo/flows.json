@@ -56,15 +56,13 @@
             "label": true
         },
         "nodes": [
-            "generate-reading",
-            "build-outbox-job",
             "enqueue-postgres",
             "generated-debug",
             "queued-debug"
         ],
-        "x": 34,
+        "x": 604,
         "y": 59,
-        "w": 1062,
+        "w": 492,
         "h": 122
     },
     {
@@ -73,9 +71,9 @@
         "name": "Demo outbox",
         "filename": "/data/outbox/outbox.sqlite",
         "maxQueuedJobs": 100000,
-        "maxJobBytes": 1048576,
+        "maxJobMb": 1,
         "maxEnqueueBatch": 1000,
-        "maxDatabaseBytes": 1073741824
+        "maxDatabaseMb": 1024
     },
     {
         "id": "postgres-outbox-sink",
@@ -87,10 +85,11 @@
         "maxInFlight": 5,
         "batchSize": 5,
         "maxAttempts": 8,
-        "retryUntilExpired": true,
+        "retryUntilExpired": "false",
         "maxAgeMs": 604800000,
         "baseDelayMs": 1000,
         "maxDelayMs": 300000,
+        "circuitBreakerEnabled": true,
         "circuitBreakerThreshold": 3,
         "circuitBreakerCooldownMs": 30000
     },
@@ -133,6 +132,7 @@
         "maxAgeMs": 86400000,
         "baseDelayMs": 2000,
         "maxDelayMs": 300000,
+        "circuitBreakerEnabled": true,
         "circuitBreakerThreshold": 3,
         "circuitBreakerCooldownMs": 30000
     },
@@ -140,7 +140,6 @@
         "id": "generate-reading",
         "type": "inject",
         "z": "demo-flow",
-        "g": "98dca9bfb2f1a4d6",
         "name": "Generate reading every 2s",
         "props": [],
         "repeat": "2",
@@ -160,7 +159,6 @@
         "id": "build-outbox-job",
         "type": "function",
         "z": "demo-flow",
-        "g": "98dca9bfb2f1a4d6",
         "name": "Build durable PostgreSQL job",
         "func": "const observedAt = new Date();\nconst sequence = context.get('sequence') || 0;\ncontext.set('sequence', sequence + 1);\nconst reading = {\n    device_id: 'demo-sensor-1',\n    observed_at: observedAt.toISOString(),\n    value_mm: 100 + (sequence % 50)\n};\nmsg.payload = reading;\nmsg.outboxJob = {\n    dedupeKey: `reading:${reading.device_id}:${reading.observed_at}`\n};\nreturn msg;",
         "outputs": 1,
@@ -460,7 +458,7 @@
         "type": "outbox-control",
         "z": "demo-flow",
         "name": "Outbox status",
-        "action": "maintenance",
+        "action": "status",
         "sink": "postgres-outbox-sink",
         "failureClass": "",
         "limit": 100,

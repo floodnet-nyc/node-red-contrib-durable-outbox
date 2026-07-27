@@ -86,7 +86,11 @@ test("registers and exercises all outbox nodes", async () => {
   const config = harness.instantiate("durable-outbox-config", {
     id: "outbox",
     filename: ":memory:",
+    maxJobMb: 1.5,
+    maxDatabaseMb: 64,
   });
+  assert.equal(config.store.maxJobBytes, 1.5 * 1_048_576);
+  assert.equal(config.store.maxDatabaseBytes, 64 * 1_048_576);
   harness.instantiate("outbox-sink-config", {
     id: "postgres-sink",
     outbox: "outbox",
@@ -322,6 +326,50 @@ test("settle uses circuit policy from the selected sink config", async () => {
   assert.equal(settle.sent[0][0].outboxSettlement.state, "pending");
   assert.equal(control.consecutiveFailures, 1);
   assert.equal(control.pausedUntil > Date.now(), true);
+  await harness.close(claim);
+  await harness.close(config);
+});
+
+test("a disabled sink circuit breaker ignores circuit failures", async () => {
+  const harness = createHarness();
+  const config = harness.instantiate("durable-outbox-config", {
+    id: "outbox",
+    filename: ":memory:",
+  });
+  harness.instantiate("outbox-sink-config", {
+    id: "postgres-sink",
+    outbox: "outbox",
+    sinkKey: "postgres",
+    retryUntilExpired: true,
+    circuitBreakerEnabled: false,
+    circuitBreakerThreshold: 1,
+  });
+  const enqueue = harness.instantiate("outbox-enqueue", {
+    sink: "postgres-sink",
+  });
+  const claim = harness.instantiate("outbox-claim", {
+    sink: "postgres-sink",
+  });
+  const settle = harness.instantiate("outbox-settle", {
+    sink: "postgres-sink",
+    outcome: "retry",
+  });
+
+  await harness.input(enqueue, { payload: { value: 1 } });
+  await harness.input(claim);
+  const message = claim.sent[0];
+  message.outboxCircuitFailure = true;
+  message.outboxError = "connection timed out";
+  await harness.input(settle, message);
+
+  const control = config.store.getSinkControl("postgres");
+  assert.equal(control.consecutiveFailures, 0);
+  assert.equal(control.pausedUntil, null);
+  config.store.retryNow("postgres");
+  await harness.input(claim);
+  assert.equal(claim.sent.length, 2);
+
+  await harness.close(enqueue);
   await harness.close(claim);
   await harness.close(config);
 });

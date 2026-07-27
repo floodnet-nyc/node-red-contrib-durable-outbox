@@ -392,12 +392,13 @@ test("infrastructure jobs retry past attempt limit and open a circuit", (t) => {
 test("circuit accounting is independent of retryability and failure class", (t) => {
   const store = withStore(t, { random: () => 0 });
   function fail(value, outcome) {
-    const [queued] = store.enqueue({
+    store.enqueue({
       sink: "postgres",
       payload: { value },
     });
-    store.claim({ sink: "postgres" });
-    return settle(store, queued.id, {
+    const claimed = store.claim({ sink: "postgres" });
+    assert.ok(claimed);
+    return settle(store, claimed.id, {
       success: false,
       error: `failure ${value}`,
       circuitBreakerThreshold: 2,

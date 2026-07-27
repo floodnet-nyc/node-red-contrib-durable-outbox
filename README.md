@@ -16,18 +16,18 @@ path on persistent local storage, such as `/data/outbox/outbox.sqlite`.
 
 The config node also bounds queue depth, encoded job size, and enqueue batch
 size. Its database-size threshold is reported as a health warning; it does not
-silently discard or reject already queued work.
+silently discard or reject already queued work. Job-size and database-warning
+settings are configured in MB, where one MB is 1,048,576 bytes.
 
 ### `outbox-sink-config`
 
 Defines one logical delivery destination and references its durable outbox.
-It centralizes:
+Its editor groups the policy into:
 
-- the stable persisted sink key;
-- lease duration, maximum in-flight jobs, and claim batch size;
-- attempt, age, and backoff defaults;
-- retry-until-expired behavior;
-- circuit-breaker threshold and cooldown.
+- **Identity:** durable outbox and stable persisted sink key;
+- **Worker capacity:** lease timeout, maximum in-flight jobs, and claim batch size;
+- **Retry lifecycle:** bounded-attempt or maximum-age mode, age, and backoff defaults;
+- **Circuit breaker:** enablement, failure threshold, and cooldown.
 
 The SQLite job stores the configured sink key, such as `postgres-primary`, not
 the generated Node-RED config-node ID.

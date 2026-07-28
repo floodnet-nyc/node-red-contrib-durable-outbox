@@ -11,6 +11,7 @@ COPY nodes /opt/outbox-node/nodes
 RUN npm install --prefix /usr/src/node-red \
       /opt/outbox-node \
       node-red-contrib-postgresql@0.15.4 \
+      node-red-contrib-msg-speed \
     && mkdir -p /data/outbox \
     && chown -R node-red:root /data /opt/outbox-node /usr/src/node-red
 

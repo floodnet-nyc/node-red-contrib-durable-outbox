@@ -1,10 +1,11 @@
 [
     {
-        "id": "demo-flow",
+        "id": "22a07776c86a0b11",
         "type": "tab",
-        "label": "Durable PostgreSQL outbox demo",
+        "label": "Minimal outbox",
         "disabled": false,
-        "info": "Generated readings are committed to SQLite before a worker attempts PostgreSQL delivery.\n\nWalk through the groups from left to right:\n1. Data Generation — create a sensor reading every 2s\n2. Queue — persist to the local SQLite outbox first\n3. Insert — poll the queue and deliver to PostgreSQL\n4. Retry — handle failures with classification and retry\n5. Operations — inspect, pause, resume, and recover\n6. Housekeeping — purge old deliveries (optional)"
+        "info": "",
+        "env": []
     },
     {
         "id": "f9d60f4c68faa702",
@@ -14,10 +15,17 @@
         "info": "Barebones batch delivery demo.\n\nBatch mode: a single claim emits msg.payload as an array of job payloads and msg.outbox.batch preserves the matching lease metadata. One PostgreSQL unnest statement processes them all, and batch-aware settlement partitions results into delivered, retrying, dead, and stale."
     },
     {
+        "id": "demo-flow",
+        "type": "tab",
+        "label": "Durable PostgreSQL outbox demo",
+        "disabled": false,
+        "info": "Generated readings are committed to SQLite before a worker attempts PostgreSQL delivery.\n\nWalk through the groups from left to right:\n1. Data Generation — create a sensor reading every 2s\n2. Queue — persist to the local SQLite outbox first\n3. Insert — poll the queue and deliver to PostgreSQL\n4. Retry — handle failures with classification and retry\n5. Operations — inspect, pause, resume, and recover\n6. Housekeeping — purge old deliveries (optional)"
+    },
+    {
         "id": "84ef9b0fd4902c58",
         "type": "group",
         "z": "demo-flow",
-        "name": "3. Insert — poll queue and deliver to PostgreSQL",
+        "name": "2,3,4. Insert — poll queue and deliver to PostgreSQL",
         "style": {
             "label": true
         },
@@ -30,29 +38,14 @@
             "delivered-debug",
             "dead-debug",
             "postgres-catch",
-            "classify-postgres"
-        ],
-        "x": 54,
-        "y": 339,
-        "w": 992,
-        "h": 162
-    },
-    {
-        "id": "98dca9bfb2f1a4d6",
-        "type": "group",
-        "z": "demo-flow",
-        "name": "2. Queue — persist to local outbox first",
-        "style": {
-            "label": true
-        },
-        "nodes": [
+            "classify-postgres",
             "enqueue-postgres",
             "queued-debug"
         ],
-        "x": 544,
-        "y": 139,
-        "w": 522,
-        "h": 82
+        "x": 294,
+        "y": 319,
+        "w": 972,
+        "h": 202
     },
     {
         "id": "790f4619bca6adf1",
@@ -66,9 +59,9 @@
             "generate-reading",
             "build-outbox-job"
         ],
-        "x": 44,
-        "y": 139,
-        "w": 482,
+        "x": 34,
+        "y": 219,
+        "w": 502,
         "h": 82
     },
     {
@@ -106,91 +99,94 @@
         },
         "nodes": [
             "purge-inject",
-            "ops-purge",
-            "housekeep-comment"
+            "ops-purge"
         ],
-        "x": 64,
-        "y": 959,
-        "w": 502,
-        "h": 142
+        "x": 74,
+        "y": 999,
+        "w": 492,
+        "h": 82
     },
     {
-        "id": "d1db51ee627713f8",
+        "id": "d3faa9c696ec2215",
         "type": "group",
-        "z": "f9d60f4c68faa702",
-        "name": "Insert — batch claim and batch UPSERT",
+        "z": "22a07776c86a0b11",
+        "name": "2,3,4. Insert — poll queue and deliver to PostgreSQL",
         "style": {
             "label": true
         },
         "nodes": [
-            "6c71a82d60ab3edd",
-            "0b62e68fa4580800",
-            "84b70f32fa160c6e",
-            "89377ce555965f22",
-            "6e27a6c9ede9e8b8",
-            "34cd0a4a977f965e",
-            "b7dc8125b7065c8b",
-            "49135bf8bd191fb8",
-            "510127e721507621"
-        ],
-        "x": 54,
-        "y": 219,
-        "w": 1072,
-        "h": 162
-    },
-    {
-        "id": "a94e9ddb6864cdd7",
-        "type": "group",
-        "z": "f9d60f4c68faa702",
-        "name": "Queue",
-        "style": {
-            "label": true
-        },
-        "nodes": [
-            "aa454e7d4c6c1737",
-            "e489f96705b9518f"
+            "ad5d572c4a69b196",
+            "3acb5a34feb7d212",
+            "06853ea470848b52",
+            "e9fd2b66563a23ae",
+            "e059616926ccd33a",
+            "8201768795c7f2a1",
+            "6fa20b75146c2598",
+            "5760120cf3329913",
+            "14a03620ca6e2223"
         ],
         "x": 434,
-        "y": 119,
-        "w": 362,
-        "h": 82
+        "y": 79,
+        "w": 672,
+        "h": 122
     },
     {
-        "id": "c47e7204be547f17",
+        "id": "a3480cccedef34ed",
         "type": "group",
-        "z": "f9d60f4c68faa702",
-        "name": "Data Generation",
+        "z": "22a07776c86a0b11",
+        "name": "1. Data Generation — create readings",
         "style": {
             "label": true
         },
         "nodes": [
-            "5d928b57c02e7808",
-            "62ecc364f0c3f682"
+            "642f83ec480a62f8",
+            "51e31157e13dccf8"
         ],
         "x": 54,
-        "y": 119,
-        "w": 352,
+        "y": 79,
+        "w": 312,
         "h": 82
     },
     {
-        "id": "batch-ops-group",
+        "id": "82ec73ca4e17ba0a",
         "type": "group",
         "z": "f9d60f4c68faa702",
-        "name": "Operations",
+        "name": "2,3,4. Insert — poll queue and deliver to PostgreSQL",
         "style": {
             "label": true
         },
         "nodes": [
-            "batch-status-inject",
-            "batch-status",
-            "batch-requeue-inject",
-            "batch-requeue",
-            "batch-ops-debug"
+            "151cab56034f8aa3",
+            "b0bef2633fcc7c2c",
+            "c2622688969a0bfb",
+            "471bef17c9ba0b47",
+            "59d379f4474a8542",
+            "70d6f74028c9ec23",
+            "eaf26f840dbb692a",
+            "0b5253176d1954e3",
+            "35a0cd6711643a85"
         ],
-        "x": 64,
-        "y": 479,
-        "w": 782,
+        "x": 434,
+        "y": 79,
+        "w": 712,
         "h": 122
+    },
+    {
+        "id": "b7216938b0444233",
+        "type": "group",
+        "z": "f9d60f4c68faa702",
+        "name": "1. Data Generation — create readings",
+        "style": {
+            "label": true
+        },
+        "nodes": [
+            "6b56f97624625685",
+            "bc2b7dc5399715e3"
+        ],
+        "x": 54,
+        "y": 79,
+        "w": 312,
+        "h": 82
     },
     {
         "id": "outbox-config",
@@ -209,10 +205,10 @@
         "outbox": "outbox-config",
         "sinkKey": "postgres-demo",
         "leaseMs": 15000,
-        "maxInFlight": 5,
-        "batchSize": 5,
+        "maxInFlight": "48",
+        "batchSize": "24",
         "maxAttempts": 8,
-        "retryUntilExpired": true,
+        "retryUntilExpired": "true",
         "maxAgeMs": 604800000,
         "baseDelayMs": 1000,
         "maxDelayMs": 300000,
@@ -255,13 +251,489 @@
         "maxInFlight": 24,
         "batchSize": 12,
         "maxAttempts": 10,
-        "retryUntilExpired": false,
+        "retryUntilExpired": "false",
         "maxAgeMs": 86400000,
         "baseDelayMs": 2000,
         "maxDelayMs": 300000,
         "circuitBreakerEnabled": true,
         "circuitBreakerThreshold": 3,
         "circuitBreakerCooldownMs": 30000
+    },
+    {
+        "id": "98958553d7a90d2e",
+        "type": "outbox-sink-config",
+        "name": "",
+        "outbox": "outbox-config",
+        "sinkKey": "postgres-minimal",
+        "leaseMs": 60000,
+        "maxInFlight": "96",
+        "batchSize": "48",
+        "maxAttempts": 10,
+        "retryUntilExpired": "false",
+        "maxAgeMs": 86400000,
+        "baseDelayMs": 2000,
+        "maxDelayMs": 300000,
+        "circuitBreakerEnabled": true,
+        "circuitBreakerThreshold": 3,
+        "circuitBreakerCooldownMs": 30000
+    },
+    {
+        "id": "ad5d572c4a69b196",
+        "type": "inject",
+        "z": "22a07776c86a0b11",
+        "g": "d3faa9c696ec2215",
+        "name": "poll",
+        "props": [],
+        "repeat": "1",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 530,
+        "y": 160,
+        "wires": [
+            [
+                "3acb5a34feb7d212"
+            ]
+        ]
+    },
+    {
+        "id": "3acb5a34feb7d212",
+        "type": "outbox-claim",
+        "z": "22a07776c86a0b11",
+        "g": "d3faa9c696ec2215",
+        "name": "Lease",
+        "sink": "98958553d7a90d2e",
+        "outputMode": "individual",
+        "x": 650,
+        "y": 160,
+        "wires": [
+            [
+                "14a03620ca6e2223"
+            ]
+        ]
+    },
+    {
+        "id": "06853ea470848b52",
+        "type": "function",
+        "z": "22a07776c86a0b11",
+        "g": "d3faa9c696ec2215",
+        "name": "query",
+        "func": "const reading = msg.payload;\nmsg.params = [\n    reading.device_id,\n    reading.observed_at,\n    reading.value_mm\n];\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 830,
+        "y": 160,
+        "wires": [
+            [
+                "e9fd2b66563a23ae"
+            ]
+        ]
+    },
+    {
+        "id": "e9fd2b66563a23ae",
+        "type": "postgresql",
+        "z": "22a07776c86a0b11",
+        "g": "d3faa9c696ec2215",
+        "name": "UPSERT",
+        "query": "INSERT INTO sensor_readings (device_id, observed_at, value_mm)\nVALUES ($1, $2, $3)\nON CONFLICT (device_id, observed_at)\nDO UPDATE SET value_mm = EXCLUDED.value_mm\nRETURNING *",
+        "postgreSQLConfig": "postgres-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 960,
+        "y": 160,
+        "wires": [
+            [
+                "e059616926ccd33a"
+            ]
+        ]
+    },
+    {
+        "id": "e059616926ccd33a",
+        "type": "outbox-settle",
+        "z": "22a07776c86a0b11",
+        "g": "d3faa9c696ec2215",
+        "name": "",
+        "sink": "98958553d7a90d2e",
+        "outcome": "success",
+        "x": 1065,
+        "y": 160,
+        "wires": [
+            [],
+            []
+        ],
+        "l": false
+    },
+    {
+        "id": "8201768795c7f2a1",
+        "type": "catch",
+        "z": "22a07776c86a0b11",
+        "g": "d3faa9c696ec2215",
+        "name": "Catch PostgreSQL",
+        "scope": [
+            "e9fd2b66563a23ae"
+        ],
+        "uncaught": false,
+        "x": 750,
+        "y": 120,
+        "wires": [
+            [
+                "6fa20b75146c2598"
+            ]
+        ]
+    },
+    {
+        "id": "6fa20b75146c2598",
+        "type": "function",
+        "z": "22a07776c86a0b11",
+        "g": "d3faa9c696ec2215",
+        "name": "Classify failure",
+        "func": "const permanentCodes = new Set([\n    '22001', '22003', '22P02',\n    '23502', '23503', '23505', '23514',\n    '42601', '42703', '42P01'\n]);\nmsg.outbox.retryable = !permanentCodes.has(msg.error?.code);\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 940,
+        "y": 120,
+        "wires": [
+            [
+                "e059616926ccd33a"
+            ]
+        ]
+    },
+    {
+        "id": "5760120cf3329913",
+        "type": "outbox-enqueue",
+        "z": "22a07776c86a0b11",
+        "g": "d3faa9c696ec2215",
+        "name": "Enqueue",
+        "sink": "98958553d7a90d2e",
+        "payloadProperty": "payload",
+        "x": 540,
+        "y": 120,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "642f83ec480a62f8",
+        "type": "inject",
+        "z": "22a07776c86a0b11",
+        "g": "a3480cccedef34ed",
+        "name": "",
+        "props": [],
+        "repeat": "0.05",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "1",
+        "topic": "",
+        "x": 150,
+        "y": 120,
+        "wires": [
+            [
+                "51e31157e13dccf8"
+            ]
+        ]
+    },
+    {
+        "id": "51e31157e13dccf8",
+        "type": "function",
+        "z": "22a07776c86a0b11",
+        "g": "a3480cccedef34ed",
+        "name": "Generate",
+        "func": "const observedAt = new Date();\nconst sequence = context.get('sequence') || 0;\ncontext.set('sequence', sequence + 1);\nconst reading = {\n    device_id: 'demo-sensor-1',\n    observed_at: observedAt.toISOString(),\n    value_mm: 100 + (sequence % 50)\n};\nmsg.payload = reading;\nmsg.outbox = {\n    dedupeKey: `reading:${reading.device_id}:${reading.observed_at}`\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 280,
+        "y": 120,
+        "wires": [
+            [
+                "04ec7ad411d634a3"
+            ]
+        ]
+    },
+    {
+        "id": "04ec7ad411d634a3",
+        "type": "msg-speed",
+        "z": "22a07776c86a0b11",
+        "name": "",
+        "frequency": "sec",
+        "interval": 1,
+        "estimation": false,
+        "ignore": false,
+        "pauseAtStartup": false,
+        "topicDependent": false,
+        "x": 395,
+        "y": 120,
+        "wires": [
+            [],
+            [
+                "5760120cf3329913"
+            ]
+        ],
+        "l": false
+    },
+    {
+        "id": "14a03620ca6e2223",
+        "type": "msg-speed",
+        "z": "22a07776c86a0b11",
+        "g": "d3faa9c696ec2215",
+        "name": "",
+        "frequency": "sec",
+        "interval": 1,
+        "estimation": false,
+        "ignore": false,
+        "pauseAtStartup": false,
+        "topicDependent": false,
+        "x": 745,
+        "y": 160,
+        "wires": [
+            [],
+            [
+                "06853ea470848b52"
+            ]
+        ],
+        "l": false
+    },
+    {
+        "id": "151cab56034f8aa3",
+        "type": "inject",
+        "z": "f9d60f4c68faa702",
+        "g": "82ec73ca4e17ba0a",
+        "name": "poll",
+        "props": [],
+        "repeat": "1",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 530,
+        "y": 160,
+        "wires": [
+            [
+                "b0bef2633fcc7c2c"
+            ]
+        ]
+    },
+    {
+        "id": "b0bef2633fcc7c2c",
+        "type": "outbox-claim",
+        "z": "f9d60f4c68faa702",
+        "g": "82ec73ca4e17ba0a",
+        "name": "Lease",
+        "sink": "7cb28bdf3de0af1d",
+        "outputMode": "batch",
+        "x": 650,
+        "y": 160,
+        "wires": [
+            [
+                "35a0cd6711643a85"
+            ]
+        ]
+    },
+    {
+        "id": "c2622688969a0bfb",
+        "type": "outbox-settle",
+        "z": "f9d60f4c68faa702",
+        "g": "82ec73ca4e17ba0a",
+        "name": "",
+        "sink": "7cb28bdf3de0af1d",
+        "outcome": "success",
+        "x": 1105,
+        "y": 160,
+        "wires": [
+            [],
+            []
+        ],
+        "l": false
+    },
+    {
+        "id": "471bef17c9ba0b47",
+        "type": "catch",
+        "z": "f9d60f4c68faa702",
+        "g": "82ec73ca4e17ba0a",
+        "name": "Catch PostgreSQL",
+        "scope": [
+            "8b2860ac741029d9"
+        ],
+        "uncaught": false,
+        "x": 770,
+        "y": 120,
+        "wires": [
+            [
+                "59d379f4474a8542"
+            ]
+        ]
+    },
+    {
+        "id": "59d379f4474a8542",
+        "type": "function",
+        "z": "f9d60f4c68faa702",
+        "g": "82ec73ca4e17ba0a",
+        "name": "Classify failure",
+        "func": "const permanentCodes = new Set([\n    '22001', '22003', '22P02',\n    '23502', '23503', '23505', '23514',\n    '42601', '42703', '42P01'\n]);\nmsg.outbox.retryable = !permanentCodes.has(msg.error?.code);\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 960,
+        "y": 120,
+        "wires": [
+            [
+                "c2622688969a0bfb"
+            ]
+        ]
+    },
+    {
+        "id": "70d6f74028c9ec23",
+        "type": "outbox-enqueue",
+        "z": "f9d60f4c68faa702",
+        "g": "82ec73ca4e17ba0a",
+        "name": "Enqueue",
+        "sink": "7cb28bdf3de0af1d",
+        "payloadProperty": "payload",
+        "x": 540,
+        "y": 120,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "6b56f97624625685",
+        "type": "inject",
+        "z": "f9d60f4c68faa702",
+        "g": "b7216938b0444233",
+        "name": "",
+        "props": [],
+        "repeat": "0.05",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "1",
+        "topic": "",
+        "x": 150,
+        "y": 120,
+        "wires": [
+            [
+                "bc2b7dc5399715e3"
+            ]
+        ]
+    },
+    {
+        "id": "bc2b7dc5399715e3",
+        "type": "function",
+        "z": "f9d60f4c68faa702",
+        "g": "b7216938b0444233",
+        "name": "Generate",
+        "func": "const observedAt = new Date();\nconst sequence = context.get('sequence') || 0;\ncontext.set('sequence', sequence + 1);\nconst reading = {\n    device_id: 'demo-sensor-1',\n    observed_at: observedAt.toISOString(),\n    value_mm: 100 + (sequence % 50)\n};\nmsg.payload = reading;\nmsg.outbox = {\n    dedupeKey: `reading:${reading.device_id}:${reading.observed_at}`\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 280,
+        "y": 120,
+        "wires": [
+            [
+                "cfa3ae36243bd425"
+            ]
+        ]
+    },
+    {
+        "id": "eaf26f840dbb692a",
+        "type": "function",
+        "z": "f9d60f4c68faa702",
+        "g": "82ec73ca4e17ba0a",
+        "name": "query",
+        "func": "const readings = msg.payload;\nmsg.params = [\n    readings.map(d => d.device_id),\n    readings.map(d => d.observed_at),\n    readings.map(d => d.value_mm),\n];\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 830,
+        "y": 160,
+        "wires": [
+            [
+                "0b5253176d1954e3"
+            ]
+        ]
+    },
+    {
+        "id": "0b5253176d1954e3",
+        "type": "postgresql",
+        "z": "f9d60f4c68faa702",
+        "g": "82ec73ca4e17ba0a",
+        "name": "Batch UPSERT",
+        "query": "INSERT INTO sensor_readings (device_id, observed_at, value_mm)\n  SELECT * \n  FROM unnest(\n    $1::text[], \n    $2::timestamptz[], \n    $3::float8[]\n  )\nON CONFLICT (device_id, observed_at)\nDO UPDATE SET value_mm = EXCLUDED.value_mm\nRETURNING *",
+        "postgreSQLConfig": "postgres-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 980,
+        "y": 160,
+        "wires": [
+            [
+                "c2622688969a0bfb"
+            ]
+        ]
+    },
+    {
+        "id": "cfa3ae36243bd425",
+        "type": "msg-speed",
+        "z": "f9d60f4c68faa702",
+        "name": "",
+        "frequency": "sec",
+        "interval": 1,
+        "estimation": false,
+        "ignore": false,
+        "pauseAtStartup": false,
+        "topicDependent": false,
+        "x": 395,
+        "y": 120,
+        "wires": [
+            [],
+            [
+                "70d6f74028c9ec23"
+            ]
+        ],
+        "l": false
+    },
+    {
+        "id": "35a0cd6711643a85",
+        "type": "msg-speed",
+        "z": "f9d60f4c68faa702",
+        "g": "82ec73ca4e17ba0a",
+        "name": "",
+        "frequency": "sec",
+        "interval": 1,
+        "estimation": false,
+        "ignore": false,
+        "pauseAtStartup": false,
+        "topicDependent": false,
+        "x": 745,
+        "y": 160,
+        "wires": [
+            [],
+            [
+                "eaf26f840dbb692a"
+            ]
+        ],
+        "l": false
     },
     {
         "id": "generate-reading",
@@ -275,8 +747,8 @@
         "once": true,
         "onceDelay": "1",
         "topic": "",
-        "x": 210,
-        "y": 180,
+        "x": 200,
+        "y": 260,
         "wires": [
             [
                 "build-outbox-job"
@@ -296,8 +768,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 420,
-        "y": 180,
+        "x": 430,
+        "y": 260,
         "wires": [
             [
                 "enqueue-postgres",
@@ -309,12 +781,12 @@
         "id": "enqueue-postgres",
         "type": "outbox-enqueue",
         "z": "demo-flow",
-        "g": "98dca9bfb2f1a4d6",
+        "g": "84ef9b0fd4902c58",
         "name": "Commit to local outbox",
         "sink": "postgres-outbox-sink",
         "payloadProperty": "payload",
-        "x": 680,
-        "y": 180,
+        "x": 650,
+        "y": 360,
         "wires": [
             [
                 "queued-debug"
@@ -334,26 +806,26 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 640,
-        "y": 120,
+        "x": 650,
+        "y": 260,
         "wires": []
     },
     {
         "id": "queued-debug",
         "type": "debug",
         "z": "demo-flow",
-        "g": "98dca9bfb2f1a4d6",
-        "name": "Durably queued (status)",
+        "g": "84ef9b0fd4902c58",
+        "name": "Queued",
         "active": false,
         "tosidebar": false,
         "console": false,
         "tostatus": true,
         "complete": "outbox.result",
         "targetType": "msg",
-        "statusVal": "",
+        "statusVal": "outbox.result",
         "statusType": "auto",
-        "x": 910,
-        "y": 180,
+        "x": 1160,
+        "y": 360,
         "wires": []
     },
     {
@@ -388,8 +860,8 @@
         "once": true,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 180,
-        "y": 400,
+        "x": 420,
+        "y": 420,
         "wires": [
             [
                 "claim-postgres"
@@ -404,8 +876,8 @@
         "name": "Lease work",
         "sink": "postgres-outbox-sink",
         "outputMode": "individual",
-        "x": 370,
-        "y": 400,
+        "x": 610,
+        "y": 420,
         "wires": [
             [
                 "prepare-postgres-query"
@@ -425,8 +897,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 520,
-        "y": 400,
+        "x": 760,
+        "y": 420,
         "wires": [
             [
                 "postgres-upsert"
@@ -444,8 +916,8 @@
         "split": false,
         "rowsPerMsg": 1,
         "outputs": 1,
-        "x": 650,
-        "y": 400,
+        "x": 890,
+        "y": 420,
         "wires": [
             [
                 "settle-success"
@@ -460,8 +932,8 @@
         "name": "",
         "sink": "postgres-outbox-sink",
         "outcome": "success",
-        "x": 785,
-        "y": 400,
+        "x": 1025,
+        "y": 420,
         "wires": [
             [
                 "delivered-debug"
@@ -477,17 +949,17 @@
         "type": "debug",
         "z": "demo-flow",
         "g": "84ef9b0fd4902c58",
-        "name": "Delivered (status)",
+        "name": "Delivered",
         "active": false,
         "tosidebar": false,
         "console": false,
         "tostatus": true,
         "complete": "payload",
         "targetType": "msg",
-        "statusVal": "",
+        "statusVal": "payload",
         "statusType": "auto",
-        "x": 910,
-        "y": 380,
+        "x": 1160,
+        "y": 420,
         "wires": []
     },
     {
@@ -500,8 +972,8 @@
             "postgres-upsert"
         ],
         "uncaught": false,
-        "x": 430,
-        "y": 460,
+        "x": 670,
+        "y": 480,
         "wires": [
             [
                 "classify-postgres"
@@ -521,8 +993,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 640,
-        "y": 460,
+        "x": 880,
+        "y": 480,
         "wires": [
             [
                 "settle-success"
@@ -543,8 +1015,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 890,
-        "y": 440,
+        "x": 1150,
+        "y": 480,
         "wires": []
     },
     {
@@ -554,7 +1026,7 @@
         "name": "3. A repeating inject polls the queue. Claim leases the oldest ready jobs (respecting max-in-flight). The UPSERT sends to PostgreSQL, then settle marks the job delivered.",
         "info": "",
         "x": 580,
-        "y": 260,
+        "y": 120,
         "wires": []
     },
     {
@@ -564,7 +1036,7 @@
         "name": "4. When PostgreSQL fails, the Catch node passes the original message (with msg.outbox preserved) to classify, which sets msg.outbox.retryable. The same settle node handles both success and failure paths.",
         "info": "",
         "x": 700,
-        "y": 300,
+        "y": 160,
         "wires": []
     },
     {
@@ -795,8 +1267,8 @@
         "z": "demo-flow",
         "name": "6. Run periodically to keep the database small. Purge delivered records older than 1 day (every hour). SQLite WAL checkpoints itself, so no manual maintenance is needed for typical workloads.",
         "info": "",
-        "x": 480,
-        "y": 940,
+        "x": 690,
+        "y": 960,
         "wires": []
     },
     {
@@ -822,7 +1294,7 @@
         "once": true,
         "onceDelay": "60",
         "x": 230,
-        "y": 1000,
+        "y": 1040,
         "wires": [
             [
                 "ops-purge"
@@ -841,7 +1313,7 @@
         "limit": 1000,
         "olderThanMs": "86400000",
         "x": 460,
-        "y": 1000,
+        "y": 1040,
         "wires": [
             [
                 "ops-debug"
@@ -856,356 +1328,6 @@
         "info": "",
         "x": 840,
         "y": 1160,
-        "wires": []
-    },
-    {
-        "id": "6c71a82d60ab3edd",
-        "type": "inject",
-        "z": "f9d60f4c68faa702",
-        "g": "d1db51ee627713f8",
-        "name": "poll",
-        "props": [],
-        "repeat": "2",
-        "crontab": "",
-        "once": true,
-        "onceDelay": 0.1,
-        "topic": "",
-        "x": 150,
-        "y": 280,
-        "wires": [
-            [
-                "0b62e68fa4580800"
-            ]
-        ]
-    },
-    {
-        "id": "0b62e68fa4580800",
-        "type": "outbox-claim",
-        "z": "f9d60f4c68faa702",
-        "g": "d1db51ee627713f8",
-        "name": "Lease PostgreSQL work",
-        "sink": "7cb28bdf3de0af1d",
-        "outputMode": "batch",
-        "x": 330,
-        "y": 280,
-        "wires": [
-            [
-                "34cd0a4a977f965e"
-            ]
-        ]
-    },
-    {
-        "id": "34cd0a4a977f965e",
-        "type": "function",
-        "z": "f9d60f4c68faa702",
-        "g": "d1db51ee627713f8",
-        "name": "query",
-        "func": "const readings = msg.payload;\nmsg.params = [\n    readings.map(d => d.device_id),\n    readings.map(d => d.observed_at),\n    readings.map(d => d.value_mm),\n];\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 520,
-        "y": 280,
-        "wires": [
-            [
-                "6e27a6c9ede9e8b8"
-            ]
-        ]
-    },
-    {
-        "id": "6e27a6c9ede9e8b8",
-        "type": "postgresql",
-        "z": "f9d60f4c68faa702",
-        "g": "d1db51ee627713f8",
-        "name": "Batch UPSERT",
-        "query": "INSERT INTO sensor_readings (device_id, observed_at, value_mm)\n  SELECT * \n  FROM unnest(\n    $1::text[], \n    $2::timestamptz[], \n    $3::float8[]\n  )\nON CONFLICT (device_id, observed_at)\nDO UPDATE SET value_mm = EXCLUDED.value_mm\nRETURNING *",
-        "postgreSQLConfig": "postgres-config",
-        "split": false,
-        "rowsPerMsg": 1,
-        "outputs": 1,
-        "x": 680,
-        "y": 280,
-        "wires": [
-            [
-                "84b70f32fa160c6e"
-            ]
-        ]
-    },
-    {
-        "id": "84b70f32fa160c6e",
-        "type": "outbox-settle",
-        "z": "f9d60f4c68faa702",
-        "g": "d1db51ee627713f8",
-        "name": "",
-        "sink": "7cb28bdf3de0af1d",
-        "outcome": "success",
-        "x": 845,
-        "y": 280,
-        "wires": [
-            [
-                "89377ce555965f22"
-            ],
-            [
-                "510127e721507621"
-            ]
-        ],
-        "l": false
-    },
-    {
-        "id": "89377ce555965f22",
-        "type": "debug",
-        "z": "f9d60f4c68faa702",
-        "g": "d1db51ee627713f8",
-        "name": "Delivered (status)",
-        "active": false,
-        "tosidebar": false,
-        "console": false,
-        "tostatus": true,
-        "complete": "payload[0].observed_at",
-        "targetType": "msg",
-        "statusVal": "payload",
-        "statusType": "auto",
-        "x": 965,
-        "y": 260,
-        "wires": [],
-        "l": false
-    },
-    {
-        "id": "49135bf8bd191fb8",
-        "type": "catch",
-        "z": "f9d60f4c68faa702",
-        "g": "d1db51ee627713f8",
-        "name": "Catch failure",
-        "scope": [
-            "d524267ddb4750ef"
-        ],
-        "uncaught": false,
-        "x": 510,
-        "y": 340,
-        "wires": [
-            [
-                "b7dc8125b7065c8b"
-            ]
-        ]
-    },
-    {
-        "id": "b7dc8125b7065c8b",
-        "type": "function",
-        "z": "f9d60f4c68faa702",
-        "g": "d1db51ee627713f8",
-        "name": "Classify failure",
-        "func": "const permanentCodes = new Set([\n    '22001', '22003', '22P02',\n    '23502', '23503', '23505', '23514',\n    '42601', '42703', '42P01'\n]);\nmsg.outbox.retryable = !permanentCodes.has(msg.error?.code);\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 680,
-        "y": 340,
-        "wires": [
-            [
-                "84b70f32fa160c6e"
-            ]
-        ]
-    },
-    {
-        "id": "510127e721507621",
-        "type": "debug",
-        "z": "f9d60f4c68faa702",
-        "g": "d1db51ee627713f8",
-        "name": "Dead letter",
-        "active": true,
-        "tosidebar": true,
-        "console": true,
-        "tostatus": false,
-        "complete": "outbox.result",
-        "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 1010,
-        "y": 320,
-        "wires": []
-    },
-    {
-        "id": "aa454e7d4c6c1737",
-        "type": "outbox-enqueue",
-        "z": "f9d60f4c68faa702",
-        "g": "a94e9ddb6864cdd7",
-        "name": "Commit to local outbox",
-        "sink": "7cb28bdf3de0af1d",
-        "payloadProperty": "payload",
-        "x": 570,
-        "y": 160,
-        "wires": [
-            [
-                "e489f96705b9518f"
-            ]
-        ]
-    },
-    {
-        "id": "e489f96705b9518f",
-        "type": "debug",
-        "z": "f9d60f4c68faa702",
-        "g": "a94e9ddb6864cdd7",
-        "name": "Durably queued (status)",
-        "active": false,
-        "tosidebar": false,
-        "console": false,
-        "tostatus": true,
-        "complete": "outbox.result",
-        "targetType": "msg",
-        "statusVal": "outbox.result",
-        "statusType": "auto",
-        "x": 735,
-        "y": 160,
-        "wires": [],
-        "l": false
-    },
-    {
-        "id": "5d928b57c02e7808",
-        "type": "inject",
-        "z": "f9d60f4c68faa702",
-        "g": "c47e7204be547f17",
-        "name": "poll",
-        "props": [],
-        "repeat": "2",
-        "crontab": "",
-        "once": true,
-        "onceDelay": "1",
-        "topic": "",
-        "x": 150,
-        "y": 160,
-        "wires": [
-            [
-                "62ecc364f0c3f682"
-            ]
-        ]
-    },
-    {
-        "id": "62ecc364f0c3f682",
-        "type": "function",
-        "z": "f9d60f4c68faa702",
-        "g": "c47e7204be547f17",
-        "name": "Generate Data",
-        "func": "const observedAt = new Date();\nconst sequence = context.get('sequence') || 0;\ncontext.set('sequence', sequence + 1);\nconst reading = {\n    device_id: 'demo-sensor-1',\n    observed_at: observedAt.toISOString(),\n    value_mm: 100 + (sequence % 50)\n};\nmsg.payload = reading;\nmsg.outbox = {\n    dedupeKey: `reading:${reading.device_id}:${reading.observed_at}`\n};\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 300,
-        "y": 160,
-        "wires": [
-            [
-                "aa454e7d4c6c1737"
-            ]
-        ]
-    },
-    {
-        "id": "batch-status-inject",
-        "type": "inject",
-        "z": "f9d60f4c68faa702",
-        "g": "batch-ops-group",
-        "name": "Inspect queue health",
-        "props": [],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "x": 240,
-        "y": 520,
-        "wires": [
-            [
-                "batch-status"
-            ]
-        ]
-    },
-    {
-        "id": "batch-status",
-        "type": "outbox-control",
-        "z": "f9d60f4c68faa702",
-        "g": "batch-ops-group",
-        "name": "Status",
-        "action": "status",
-        "sink": "7cb28bdf3de0af1d",
-        "failureClass": "",
-        "limit": 100,
-        "olderThanMs": "",
-        "x": 440,
-        "y": 520,
-        "wires": [
-            [
-                "batch-ops-debug"
-            ]
-        ]
-    },
-    {
-        "id": "batch-requeue-inject",
-        "type": "inject",
-        "z": "f9d60f4c68faa702",
-        "g": "batch-ops-group",
-        "name": "Requeue infrastructure failures",
-        "props": [],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "x": 240,
-        "y": 560,
-        "wires": [
-            [
-                "batch-requeue"
-            ]
-        ]
-    },
-    {
-        "id": "batch-requeue",
-        "type": "outbox-control",
-        "z": "f9d60f4c68faa702",
-        "g": "batch-ops-group",
-        "name": "Requeue dead",
-        "action": "requeue-dead",
-        "sink": "7cb28bdf3de0af1d",
-        "failureClass": "infrastructure",
-        "limit": 1000,
-        "olderThanMs": "",
-        "x": 510,
-        "y": 560,
-        "wires": [
-            [
-                "batch-ops-debug"
-            ]
-        ]
-    },
-    {
-        "id": "batch-ops-debug",
-        "type": "debug",
-        "z": "f9d60f4c68faa702",
-        "g": "batch-ops-group",
-        "name": "Control result",
-        "active": true,
-        "tosidebar": true,
-        "console": true,
-        "tostatus": false,
-        "complete": "outbox.result",
-        "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 720,
-        "y": 540,
-        "wires": []
-    },
-    {
-        "id": "batch-comment",
-        "type": "comment",
-        "z": "f9d60f4c68faa702",
-        "name": "Batch mode: a single claim emits msg.payload as an array of job payloads and msg.outbox.batch preserves the matching lease metadata. One PostgreSQL unnest statement processes them all. Batch-aware settlement partitions results into delivered, retrying, dead, and stale.",
-        "info": "",
-        "x": 950,
-        "y": 80,
         "wires": []
     }
 ]

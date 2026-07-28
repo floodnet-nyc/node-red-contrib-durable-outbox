@@ -9,5 +9,8 @@ demo/.config.*.json
 demo/.config.*.json.backup
 demo/.flows*.backup
 demo/flows_cred.json
+demo/package-lock.json
 demo/package.json
+demo/performance-monitor.db*
+demo/.npm/
 /data/

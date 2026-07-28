@@ -130,7 +130,7 @@ module.exports = function registerOutboxNodes(RED) {
     const unsubscribeQueueDepth = sinkConfig.subscribeQueueDepth((count) => {
       const now = Date.now();
       if (count !== 0 && now - lastDepthStatus < STATUS_THROTTLE_MS) return;
-      lastDepthStatus = now;
+      if (count !== 0) lastDepthStatus = now;
       node.status({
         fill: "green",
         shape: "dot",

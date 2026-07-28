@@ -13,8 +13,8 @@ Install the module and create three configuration nodes, then wire four nodes:
 
 ```
 [Data Source] → [outbox-enqueue] → (original message emitted)
-[Inject 5s]  → [outbox-claim]  → [Your Deliver Node] → [outbox-settle (success)]
-[Catch]      → [Function]      → [outbox-settle (msg mode)]
+[Inject 5s]  → [outbox-claim]  → [Your Deliver Node] → [outbox-settle (Success)]
+                               └─ [Catch] → [fn: msg.outbox.retryable=true] ─┘
 ```
 
 1. **`durable-outbox-config`** — Set the database path, e.g. `/data/outbox/outbox.sqlite`.

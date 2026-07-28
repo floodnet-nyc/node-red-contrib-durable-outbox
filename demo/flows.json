@@ -4,7 +4,7 @@
         "type": "tab",
         "label": "Durable PostgreSQL outbox demo",
         "disabled": false,
-        "info": "Generated readings are committed to SQLite before a worker attempts PostgreSQL delivery.\n\nWalk through the groups from left to right:\n1. Data Generation — create a sensor reading every 2s\n2. Queue — persist to the local SQLite outbox first\n3. Insert — poll the queue and deliver to PostgreSQL\n4. Retry — handle failures with classification and retry\n5. Operations — inspect, pause, resume, and recover\n6. Housekeeping — run periodic cleanup and maintenance"
+        "info": "Generated readings are committed to SQLite before a worker attempts PostgreSQL delivery.\n\nWalk through the groups from left to right:\n1. Data Generation — create a sensor reading every 2s\n2. Queue — persist to the local SQLite outbox first\n3. Insert — poll the queue and deliver to PostgreSQL\n4. Retry — handle failures with classification and retry\n5. Operations — inspect, pause, resume, and recover\n6. Housekeeping — purge old deliveries (optional)"
     },
     {
         "id": "f9d60f4c68faa702",
@@ -100,15 +100,14 @@
         "id": "housekeep-group",
         "type": "group",
         "z": "demo-flow",
-        "name": "6. Housekeeping — periodic cleanup and maintenance",
+        "name": "6. Housekeeping — periodic cleanup (optional, for production)",
         "style": {
             "label": true
         },
         "nodes": [
             "purge-inject",
             "ops-purge",
-            "maint-inject",
-            "ops-maint"
+            "housekeep-comment"
         ],
         "x": 64,
         "y": 959,
@@ -794,7 +793,7 @@
         "id": "housekeep-comment",
         "type": "comment",
         "z": "demo-flow",
-        "name": "6. Run periodically to manage database size. Purge delivered records older than 1 day (every hour). Checkpoint the WAL (every 12 hours).",
+        "name": "6. Run periodically to keep the database small. Purge delivered records older than 1 day (every hour). SQLite WAL checkpoints itself, so no manual maintenance is needed for typical workloads.",
         "info": "",
         "x": 480,
         "y": 940,
@@ -843,50 +842,6 @@
         "olderThanMs": "86400000",
         "x": 460,
         "y": 1000,
-        "wires": [
-            [
-                "ops-debug"
-            ]
-        ]
-    },
-    {
-        "id": "maint-inject",
-        "type": "inject",
-        "z": "demo-flow",
-        "g": "housekeep-group",
-        "name": "Checkpoint WAL every 12h",
-        "props": [
-            {
-                "p": "outbox.vacuum",
-                "v": "false",
-                "vt": "bool"
-            }
-        ],
-        "repeat": "43200",
-        "crontab": "",
-        "once": true,
-        "onceDelay": "120",
-        "x": 230,
-        "y": 1060,
-        "wires": [
-            [
-                "ops-maint"
-            ]
-        ]
-    },
-    {
-        "id": "ops-maint",
-        "type": "outbox-control",
-        "z": "demo-flow",
-        "g": "housekeep-group",
-        "name": "Maintenance",
-        "action": "maintenance",
-        "sink": "postgres-outbox-sink",
-        "failureClass": "",
-        "limit": 100,
-        "olderThanMs": "",
-        "x": 450,
-        "y": 1060,
         "wires": [
             [
                 "ops-debug"

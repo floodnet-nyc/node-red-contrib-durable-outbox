@@ -540,6 +540,10 @@
     <dd>
       Set to false to skip the WAL checkpoint during <code>maintenance</code>.
     </dd>
+    <dt class="optional">msg.outbox.sweep <span class="property-type">boolean</span></dt>
+    <dd>
+      Set to false to skip expiring exhausted jobs during <code>maintenance</code>.
+    </dd>
     <dt class="optional">msg.outbox.full <span class="property-type">boolean</span></dt>
     <dd>
       Set to true with <code>check-integrity</code> to run SQLite's full integrity check
@@ -615,8 +619,12 @@
 
     <dt><code>maintenance</code></dt>
     <dd>
-      Checkpoints the SQLite WAL. Set <code>msg.outbox.vacuum = true</code> to compact the main
-      database after retention cleanup; schedule vacuum during a quiet maintenance window.
+      Expires attempt-exhausted and age-expired jobs across all sinks, then checkpoints the
+      SQLite WAL. Unlike the sweep performed while claiming, this runs even for paused or
+      circuit-open sinks, so expiry does not depend on a claim node polling. Set
+      <code>msg.outbox.sweep = false</code> to skip the expiry pass, or
+      <code>msg.outbox.vacuum = true</code> to compact the main database after retention cleanup;
+      schedule vacuum during a quiet maintenance window.
     </dd>
 
     <dt><code>check-integrity</code></dt>

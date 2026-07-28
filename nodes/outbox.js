@@ -562,6 +562,7 @@ module.exports = function registerOutboxNodes(RED) {
             break;
           case "maintenance":
             result = store.maintenance({
+              sweep: shell.sweep !== false,
               checkpoint: shell.checkpoint !== false,
               vacuum: shell.vacuum === true,
             });

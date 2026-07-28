@@ -516,6 +516,45 @@ test("circuit accounting is independent of retryability and failure class", (t) 
   assert.equal(result.circuit.pausedUntil != null, true);
 });
 
+test("circuit failures are clamped at the configured threshold", (t) => {
+  const store = withStore(t, { now: () => 5_000 });
+  let control;
+  for (let i = 0; i < 10; i += 1) {
+    control = store.recordSinkFailure("postgres", {
+      circuitFailure: true,
+      threshold: 3,
+      cooldownMs: 1_000,
+      errorText: "boom",
+    });
+  }
+  assert.equal(control.consecutiveFailures, 3);
+  assert.equal(control.pausedUntil, 6_000);
+  store.recordSinkSuccess("postgres");
+  assert.equal(store.getSinkControl("postgres").consecutiveFailures, 0);
+});
+
+test("maintenance expires exhausted jobs even while a sink is paused", (t) => {
+  let now = 1_000_000;
+  const store = withStore(t, { now: () => now });
+  const [job] = store.enqueue({
+    sink: "postgres",
+    payload: { value: 1 },
+    maxAgeMs: 1_000,
+  });
+  store.pauseSink("postgres");
+  now += 5_000;
+
+  // A paused sink neither claims nor sweeps.
+  assert.deepEqual(store.claimBatch({ sink: "postgres" }), []);
+  assert.equal(store.stats().deadLetters, 0);
+
+  // Maintenance expires the aged job regardless of the pause.
+  const result = store.maintenance({ checkpoint: false });
+  assert.equal(result.sweep.swept, 1);
+  assert.equal(store.stats().deadLetters, 1);
+  assert.equal(store.listDeadLetters({ sink: "postgres" })[0].id, job.id);
+});
+
 test("bulk dead-letter recovery filters by sink and failure class", (t) => {
   const store = withStore(t);
   const jobs = store.enqueue([

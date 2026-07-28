@@ -431,6 +431,50 @@ test("infrastructure jobs retry past attempt limit and open a circuit", (t) => {
   assert.equal(store.getSinkControl("postgres").consecutiveFailures, 0);
 });
 
+test("a half-open circuit leases a single probe until it recovers", (t) => {
+  let now = 100_000;
+  const store = withStore(t, { now: () => now, random: () => 0 });
+  for (let value = 0; value < 3; value += 1) {
+    store.enqueue({
+      sink: "postgres",
+      payload: { value },
+      retryUntilExpired: true,
+      maxAgeMs: 7 * 86_400_000,
+    });
+  }
+  const claimAll = () =>
+    store.claimBatch({ sink: "postgres", maxInFlight: 5, batchSize: 10 });
+
+  const [opener] = store.claimBatch({
+    sink: "postgres",
+    maxInFlight: 1,
+    batchSize: 1,
+  });
+  settle(store, opener.id, {
+    success: false,
+    retryable: true,
+    circuitFailure: true,
+    failureClass: "infrastructure",
+    error: { code: "ETIMEDOUT" },
+    circuitBreakerThreshold: 1,
+    circuitBreakerCooldownMs: 30_000,
+  });
+  assert.equal(store.getSinkControl("postgres").pausedUntil, now + 30_000);
+
+  // Still cooling down: claims are refused entirely.
+  assert.deepEqual(claimAll(), []);
+
+  // Cooldown elapsed → half-open: a single probe despite ample capacity.
+  now += 30_000;
+  const probe = claimAll();
+  assert.equal(probe.length, 1);
+
+  // A successful probe closes the circuit and restores full batching.
+  settle(store, probe[0].id, { success: true });
+  assert.equal(store.getSinkControl("postgres").pausedUntil, null);
+  assert.equal(claimAll().length, 2);
+});
+
 test("circuit accounting is independent of retryability and failure class", (t) => {
   const store = withStore(t, { random: () => 0 });
   function fail(value, outcome) {

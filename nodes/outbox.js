@@ -318,8 +318,8 @@ module.exports = function registerOutboxNodes(RED) {
       }
     }
 
-    function settleOutbox(outbox, outcome, circuitFailure) {
-      return sinkConfig.store.settle(outbox.id, {
+    function storeOutcome(outbox, outcome, circuitFailure) {
+      return {
         leaseToken: outbox.leaseToken,
         success: outcome.success,
         retryable: outcome.retryable,
@@ -329,7 +329,14 @@ module.exports = function registerOutboxNodes(RED) {
         circuitFailure,
         circuitBreakerThreshold: sinkConfig.circuitBreakerThreshold,
         circuitBreakerCooldownMs: sinkConfig.circuitBreakerCooldownMs,
-      });
+      };
+    }
+
+    function settleOutbox(outbox, outcome, circuitFailure) {
+      return sinkConfig.store.settle(
+        outbox.id,
+        storeOutcome(outbox, outcome, circuitFailure)
+      );
     }
 
     node.on("input", (msg, send, done) => {
@@ -343,25 +350,21 @@ module.exports = function registerOutboxNodes(RED) {
           }
           for (const lease of batch) validateOutbox(lease);
 
-          const entries = [];
-          let circuitFailurePending =
+          const circuitFailure =
             !outcome.success &&
             sinkConfig.circuitBreakerEnabled &&
             outcome.circuitFailure;
-          for (const lease of batch) {
-            const result = settleOutbox(
-              lease,
-              outcome,
-              circuitFailurePending
-            );
-            if (
-              circuitFailurePending &&
-              result.state !== "stale_lease"
-            ) {
-              circuitFailurePending = false;
-            }
-            entries.push({ lease, result });
-          }
+          const results = sinkConfig.store.settleBatch(
+            batch.map((lease) => ({
+              id: lease.id,
+              outcome: storeOutcome(lease, outcome, circuitFailure),
+            })),
+            { circuitFailureOnce: circuitFailure }
+          );
+          const entries = batch.map((lease, index) => ({
+            lease,
+            result: results[index],
+          }));
           sinkConfig.notifyQueueDepth();
 
           const summary = {

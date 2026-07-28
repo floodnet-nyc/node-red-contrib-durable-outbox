@@ -8,7 +8,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test test/*.test.js",
+    "test:stress": "node --test test/stress/*.stress.js",
+    "test:postgres": "node --test test/integration/*.integration.js"
   },
   "keywords": [
     "node-red",

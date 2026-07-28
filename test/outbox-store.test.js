@@ -138,6 +138,7 @@ test("enqueue is atomic and deduplicates equivalent jobs", (t) => {
   assert.equal(emptyStats.deadLetters, 0);
   assert.deepEqual(emptyStats.controls, []);
   assert.equal(emptyStats.health.queued, 0);
+  assert.equal(store.countQueued("postgres"), 0);
 
   const first = store.enqueue({
     sink: "postgres",
@@ -151,6 +152,7 @@ test("enqueue is atomic and deduplicates equivalent jobs", (t) => {
   assert.equal(first.inserted, true);
   assert.equal(duplicate.inserted, false);
   assert.equal(duplicate.id, first.id);
+  assert.equal(store.countQueued("postgres"), 1);
 });
 
 test("claim enforces concurrency and recovers expired leases", (t) => {
@@ -240,6 +242,46 @@ test("batch claims fill only remaining in-flight capacity", (t) => {
   assert.equal(second.length, 2);
   assert.equal(full.length, 0);
   assert.equal(new Set([...first, ...second].map((job) => job.id)).size, 5);
+});
+
+test("batch settlement is atomic", (t) => {
+  const store = withStore(t);
+  store.enqueue([
+    { sink: "postgres", dedupeKey: "settle-batch-1", payload: { value: 1 } },
+    { sink: "postgres", dedupeKey: "settle-batch-2", payload: { value: 2 } },
+  ]);
+  const jobs = store.claimBatch({
+    sink: "postgres",
+    maxInFlight: 2,
+    batchSize: 2,
+  });
+
+  assert.throws(
+    () =>
+      store.settleBatch([
+        {
+          id: jobs[0].id,
+          outcome: { leaseToken: jobs[0].leaseToken, success: true },
+        },
+        {
+          id: "missing-job",
+          outcome: { leaseToken: jobs[1].leaseToken, success: true },
+        },
+      ]),
+    /does not exist/
+  );
+  assert.equal(store.getJob(jobs[0].id).state, "leased");
+
+  const results = store.settleBatch(
+    jobs.map((job) => ({
+      id: job.id,
+      outcome: { leaseToken: job.leaseToken, success: true },
+    }))
+  );
+  assert.deepEqual(
+    results.map((result) => result.state),
+    ["delivered", "delivered"]
+  );
 });
 
 test("repeatedly abandoned leases dead-letter at the attempt bound", (t) => {

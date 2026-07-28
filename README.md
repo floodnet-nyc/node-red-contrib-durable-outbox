@@ -227,6 +227,59 @@ The tests cover:
 - bounded retention, deletion, health, and capacity controls;
 - registration and message behavior of all six Node-RED node types.
 
+### Stress and outage tests
+
+The primary stress suite uses an on-disk SQLite outbox and a deterministic
+asynchronous sink simulator. It does not require Docker or PostgreSQL:
+
+```sh
+npm run test:stress
+```
+
+The suite measures growing-backlog enqueue latency, claim/settle drain
+throughput, event-loop delay, database/WAL size, and expired-lease cleanup. Its
+Node-RED scenario opens the circuit during a simulated outage, verifies that the
+entire backlog remains durable, resumes the sink, drains every job exactly once,
+and fences a slow response after its lease is reclaimed. A separate process is
+killed with outstanding leases to verify WAL integrity and restart recovery.
+Metrics are emitted as single-line `STRESS_METRICS` JSON records for collection
+by CI.
+
+The default profile uses 5,000 jobs. Larger or environment-specific profiles
+can be selected without changing the tests:
+
+```sh
+STRESS_JOBS=100000 \
+STRESS_EXPIRED_JOBS=100000 \
+STRESS_BATCH_SIZE=100 \
+STRESS_MAX_IN_FLIGHT=500 \
+npm run test:stress
+```
+
+Available performance budgets are:
+
+- `STRESS_MIN_JOBS_PER_SECOND` — minimum direct-store enqueue throughput
+  (default `100`);
+- `STRESS_MAX_EVENT_LOOP_P99_MS` — maximum simulated-flow p99 event-loop delay
+  (default `250`);
+- `STRESS_MAX_STORE_MS` and `STRESS_MAX_SUITE_MS` — per-test timeout budgets
+  (default `120000`).
+
+These deliberately portable defaults catch severe regressions. Record metrics
+on the intended production hardware and tighten the budgets there.
+
+PostgreSQL remains an optional integration smoke test for the real
+`node-red-contrib-postgresql` message contract. With the Compose demo already
+running, verify that new readings reach PostgreSQL:
+
+```sh
+docker compose up --build -d --wait
+npm run test:postgres
+```
+
+This smoke test is intentionally separate from both `npm test` and the
+simulated outage suite.
+
 ## Docker Compose PostgreSQL demo
 
 Build and start Node-RED and PostgreSQL:

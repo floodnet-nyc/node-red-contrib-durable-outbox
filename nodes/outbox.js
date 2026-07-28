@@ -125,7 +125,12 @@ module.exports = function registerOutboxNodes(RED) {
     const node = this;
     const sinkConfig = getSinkConfigNode(node, config.sink);
     const payloadProperty = config.payloadProperty || "payload";
+    const STATUS_THROTTLE_MS = 500;
+    let lastDepthStatus = -STATUS_THROTTLE_MS;
     const unsubscribeQueueDepth = sinkConfig.subscribeQueueDepth((count) => {
+      const now = Date.now();
+      if (count !== 0 && now - lastDepthStatus < STATUS_THROTTLE_MS) return;
+      lastDepthStatus = now;
       node.status({
         fill: "green",
         shape: "dot",

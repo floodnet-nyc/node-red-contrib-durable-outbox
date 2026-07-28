@@ -1,7 +1,7 @@
 {
   "name": "node-red-contrib-durable-outbox",
   "version": "0.8.0",
-  "description": "Durable SQLite outbox nodes for Node-RED",
+  "description": "Durable SQLite outbox queue for Node-RED",
   "main": "nodes/outbox.js",
   "type": "commonjs",
   "engines": {

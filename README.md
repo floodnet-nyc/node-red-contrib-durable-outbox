@@ -33,10 +33,12 @@ That's it. See the [demo flows](#docker-compose-postgresql-demo) below for a com
 Owns one SQLite database and applies its schema and durability settings. Use a
 path on persistent local storage, such as `/data/outbox/outbox.sqlite`.
 
-The config node also bounds queue depth, encoded job size, and enqueue batch
-size. Its database-size threshold is reported as a health warning; it does not
-silently discard or reject already queued work. Job-size and database-warning
-settings are configured in MB, where one MB is 1,048,576 bytes.
+The config node also bounds queue depth, encoded job size, enqueue batch size,
+logical database use, and minimum filesystem free space. New writes are
+rejected before SQLite grows past either storage boundary; existing work is
+never silently deleted. Reusable SQLite pages do not count as database use.
+Set the free-space reserve to zero only when another system enforces disk
+headroom. Size settings use MB, where one MB is 1,048,576 bytes.
 
 ### `outbox-sink-config`
 
@@ -78,7 +80,9 @@ node before enqueue when each element should be persisted independently.
 
 `dedupeKey` is optional. If omitted, the node hashes the resolved sink and
 canonical payload. A duplicate enqueue returns the existing job instead of
-creating another one. JSON values, `Date`, and `Buffer` instances are preserved
+creating another one. Job IDs are generated and managed by the outbox; callers
+must use `dedupeKey`, not `msg.outbox.id`, for idempotency. JSON values, `Date`,
+and `Buffer` instances are preserved
 using a versioned encoding. Unsafe values such as circular references,
 functions, streams, and arbitrary class instances are rejected before the
 transaction commits.
@@ -136,6 +140,13 @@ An expired lease is eligible for recovery by another poll. Each new claim gets
 a fresh lease token. Settlement requires that token, so a slow worker cannot
 settle a job after another worker has reclaimed it.
 
+A payload that cannot be decoded is quarantined to the dead-letter table with
+failure class `outbox-corruption`, at a maximum of ten rows per poll. Healthy
+rows in the same claim can continue. These records remain inspectable but
+cannot be replayed without external repair. An unknown versioned payload
+encoding pauses the sink instead, protecting data that may require a newer
+module version.
+
 After the configured number of consecutive circuit failures, claims
 for that sink pause for the circuit-breaker cooldown. Claims become eligible
 again after the cooldown, and a successful delivery closes the circuit.
@@ -188,15 +199,18 @@ Supported actions are:
 - `list-dead`, `requeue-dead`, and `requeue-one`;
 - `delete-dead` for reviewed, bounded dead-letter deletion;
 - `purge-delivered` for bounded retention cleanup;
-- `maintenance` for WAL checkpointing and an explicitly requested vacuum.
+- `maintenance` for WAL checkpointing and an explicitly requested vacuum;
+- `check-integrity` for schema, trigger, queue-counter, and SQLite checks.
 
 `resume` closes the sink circuit and makes all pending work immediately
 eligible. Results are returned in both `msg.payload` and
 `msg.outbox.result`.
 
-`status`, `purge-delivered`, and `maintenance` operate on the selected sink's
-entire parent outbox. Dead-letter and retry controls default to the selected
-sink key; `msg.outbox.sink` can override that key within the same outbox.
+`status`, `purge-delivered`, `maintenance`, and `check-integrity` operate on
+the selected sink's entire parent outbox. Dead-letter and retry controls
+default to the selected sink key; `msg.outbox.sink` can override that key
+within the same outbox. Bulk replay skips `outbox-corruption` records and
+reports them as `corruptSkipped`.
 
 ## Tests
 
@@ -225,6 +239,9 @@ The tests cover:
 - filtered bulk dead-letter replay;
 - SQL-filtered dead-letter listing;
 - bounded retention, deletion, health, and capacity controls;
+- managed-ID enforcement and distinct storage admission failures;
+- corrupt-payload quarantine and unknown-encoding sink pauses;
+- explicit integrity checks and startup queue-counter reconciliation;
 - registration and message behavior of all six Node-RED node types.
 
 ### Stress and outage tests
@@ -389,7 +406,14 @@ flow.
 - Mount the SQLite directory on persistent local storage. Do not place the WAL
   database on NFS.
 - Monitor `status` health fields for queue depth, oldest queued age, expired
-  leases, dead-letter count, and database/WAL size.
+  leases, dead-letter count, logical database use, reusable pages, filesystem
+  free space, and startup integrity.
+- Alert on `OUTBOX_DATABASE_CAPACITY` and `OUTBOX_DISK_HEADROOM` enqueue errors;
+  capacity rejection deliberately applies backpressure rather than risking a
+  full disk.
+- Run `check-integrity` periodically and investigate `ok: false` before
+  resuming ingestion. Startup recreates the queue-count triggers and reconciles
+  their counters transactionally.
 - A worker lease should exceed the sink's connection and request timeout.
 - Trigger `purge-delivered` periodically in bounded batches. Run an optional
   maintenance vacuum only during a quiet window.

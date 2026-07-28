@@ -543,7 +543,6 @@ test("retention, deletion, health, and capacity controls are bounded", (t) => {
     maxQueuedJobs: 2,
     maxJobBytes: 256,
     maxEnqueueBatch: 2,
-    maxDatabaseBytes: 1,
   });
   const jobs = store.enqueue([
     { sink: "postgres", dedupeKey: "retained-1", payload: { value: 1 } },
@@ -570,9 +569,11 @@ test("retention, deletion, health, and capacity controls are bounded", (t) => {
     error: "bad row",
   });
 
+  store.maxDatabaseBytes = 1;
   const health = store.stats().health;
   assert.equal(health.queued, 0);
   assert.equal(health.databaseSizeWarning, true);
+  store.maxDatabaseBytes = 1_073_741_824;
   assert.equal(
     store.purgeDelivered({ olderThanMs: 50, limit: 1 }).purged,
     1
@@ -604,4 +605,178 @@ test("retention, deletion, health, and capacity controls are bounded", (t) => {
       ]),
     /batch exceeds/
   );
+});
+
+test("enqueue manages job ids and reports distinct admission failures", (t) => {
+  const store = withStore(t, {
+    diskFreeBytes: 1_024,
+    minFreeDiskBytes: 2_048,
+  });
+
+  assert.throws(
+    () =>
+      store.enqueue({
+        id: "caller-controlled",
+        sink: "postgres",
+        payload: { value: 1 },
+      }),
+    (error) => error.code === "OUTBOX_MANAGED_ID"
+  );
+  assert.throws(
+    () =>
+      store.enqueue({
+        sink: "postgres",
+        payload: { value: 1 },
+      }),
+    (error) => error.code === "OUTBOX_DISK_HEADROOM"
+  );
+
+  store.minFreeDiskBytes = 0;
+  const used = store.storageHealth().usedDatabaseBytes;
+  store.maxDatabaseBytes = used + 512;
+  assert.throws(
+    () =>
+      store.enqueue({
+        sink: "postgres",
+        payload: { value: "x".repeat(1_024) },
+      }),
+    (error) => error.code === "OUTBOX_DATABASE_CAPACITY"
+  );
+  assert.equal(store.countQueued("postgres"), 0);
+});
+
+test("claim quarantines invalid payloads without blocking healthy jobs", (t) => {
+  let now = 70_000;
+  const store = withStore(t, { now: () => now });
+  const [corrupt] = store.enqueue({
+    sink: "postgres",
+    dedupeKey: "corrupt",
+    payload: { value: "bad" },
+  });
+  now += 1;
+  const [healthy] = store.enqueue({
+    sink: "postgres",
+    dedupeKey: "healthy",
+    payload: { value: "good" },
+  });
+  store.db
+    .prepare("UPDATE outbox_jobs SET payload_json = ? WHERE id = ?")
+    .run("{not-json", corrupt.id);
+
+  const jobs = store.claimBatch({
+    sink: "postgres",
+    batchSize: 2,
+    maxInFlight: 2,
+  });
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].id, healthy.id);
+  assert.equal(jobs.quarantined, 1);
+  assert.equal(store.countQueued("postgres"), 1);
+
+  const dead = store.listDeadLetters();
+  assert.equal(dead.length, 1);
+  assert.equal(dead[0].lastFailureClass, "outbox-corruption");
+  assert.equal(dead[0].payload, null);
+  assert.equal(dead[0].payloadRaw, "{not-json");
+  assert.equal(dead[0].replayable, false);
+  assert.equal(dead[0].payloadDecodeError.code, "OUTBOX_INVALID_PAYLOAD");
+  assert.throws(
+    () => store.requeueDeadLetter(corrupt.id),
+    (error) => error.code === "OUTBOX_CORRUPT_REPLAY"
+  );
+  assert.deepEqual(
+    store.requeueDeadLetters({ sink: "postgres" }),
+    {
+      requeued: 0,
+      ids: [],
+      sink: "postgres",
+      failureClass: null,
+      corruptSkipped: 1,
+    }
+  );
+});
+
+test("unknown payload encodings pause rather than quarantine a sink", (t) => {
+  const store = withStore(t);
+  const [job] = store.enqueue({
+    sink: "postgres",
+    payload: { value: 1 },
+  });
+  store.db
+    .prepare("UPDATE outbox_jobs SET payload_encoding = ? WHERE id = ?")
+    .run("future-v3", job.id);
+
+  assert.throws(
+    () => store.claim({ sink: "postgres" }),
+    (error) =>
+      error.code === "OUTBOX_UNSUPPORTED_ENCODING" &&
+      error.sinkPaused === true
+  );
+  assert.equal(store.getSinkControl("postgres").manuallyPaused, true);
+  assert.equal(store.listDeadLetters().length, 0);
+  const row = store.db
+    .prepare("SELECT state, attempts FROM outbox_jobs WHERE id = ?")
+    .get(job.id);
+  assert.equal(row.state, "pending");
+  assert.equal(row.attempts, 0);
+});
+
+test("claim bounds corrupt-payload quarantine work per poll", (t) => {
+  const store = withStore(t);
+  const jobs = store.enqueue(
+    Array.from({ length: 11 }, (_, index) => ({
+      sink: "postgres",
+      dedupeKey: `corrupt-bound-${index}`,
+      payload: { index },
+    }))
+  );
+  const corrupt = store.db.prepare(
+    "UPDATE outbox_jobs SET payload_json = ? WHERE id = ?"
+  );
+  for (const job of jobs) corrupt.run("{bad", job.id);
+
+  const first = store.claimBatch({
+    sink: "postgres",
+    batchSize: 20,
+    maxInFlight: 20,
+  });
+  assert.equal(first.length, 0);
+  assert.equal(first.quarantined, 10);
+  assert.equal(store.countQueued("postgres"), 1);
+
+  const second = store.claimBatch({
+    sink: "postgres",
+    batchSize: 20,
+    maxInFlight: 20,
+  });
+  assert.equal(second.quarantined, 1);
+  assert.equal(store.countQueued("postgres"), 0);
+  assert.equal(store.listDeadLetters({ limit: 20 }).length, 11);
+});
+
+test("integrity checks detect drift and startup reconciles counters and triggers", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "durable-outbox-integrity-"));
+  const filename = join(directory, "outbox.sqlite");
+  let store = new OutboxStore(filename);
+  t.after(() => {
+    store?.close();
+    rmSync(directory, { recursive: true, force: true });
+  });
+  store.enqueue({ sink: "postgres", payload: { value: 1 } });
+  assert.equal(store.checkIntegrity().ok, true);
+
+  store.db
+    .prepare("UPDATE outbox_queue_counts SET queued = 0 WHERE sink = ?")
+    .run("postgres");
+  store.db.exec("DROP TRIGGER outbox_queue_count_insert");
+  const drift = store.checkIntegrity({ sqlite: false });
+  assert.equal(drift.ok, false);
+  assert.equal(drift.countersMatch, false);
+  assert.deepEqual(drift.missingTriggers, ["outbox_queue_count_insert"]);
+
+  store.close();
+  store = new OutboxStore(filename);
+  assert.equal(store.startupIntegrity.ok, true);
+  assert.equal(store.countQueued("postgres"), 1);
+  assert.equal(store.checkIntegrity().ok, true);
 });

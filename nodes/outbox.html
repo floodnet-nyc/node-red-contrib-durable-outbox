@@ -23,6 +23,11 @@
         value: 1024,
         required: true,
         validate: RED.validators.number()
+      },
+      minFreeDiskMb: {
+        value: 256,
+        required: true,
+        validate: RED.validators.number()
       }
     },
     label: function () {
@@ -220,8 +225,12 @@
     <input type="number" id="node-config-input-maxEnqueueBatch">
   </div>
   <div class="form-row">
-    <label for="node-config-input-maxDatabaseMb">DB warning size (MB)</label>
+    <label for="node-config-input-maxDatabaseMb">Maximum database use (MB)</label>
     <input type="number" id="node-config-input-maxDatabaseMb" min="0.001" step="any">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-minFreeDiskMb">Minimum free disk (MB)</label>
+    <input type="number" id="node-config-input-minFreeDiskMb" min="0" step="any">
   </div>
 </script>
 
@@ -378,6 +387,7 @@
       <option value="delete-dead">Delete matching dead letters</option>
       <option value="purge-delivered">Purge delivered jobs</option>
       <option value="maintenance">Database maintenance</option>
+      <option value="check-integrity">Check database integrity</option>
       <option value="msg">Read msg.outbox.action</option>
     </select>
   </div>
@@ -399,9 +409,12 @@
 <script type="text/html" data-help-name="durable-outbox-config">
   <p>Owns a durable SQLite outbox database shared by the other outbox nodes.</p>
   <p>
-    Queue depth, job size, and enqueue batch limits reject oversized writes atomically. The
-    database size setting is a warning threshold reported by <code>status</code>; it does not
-    delete or reject jobs. Size fields use MB, where one MB is 1,048,576 bytes.
+    Queue depth, job size, enqueue batch, database use, and free-disk limits reject writes
+    atomically before SQLite is asked to grow. Database use excludes reusable SQLite pages.
+    Minimum free disk reserves headroom for the rest of the system; set it to zero to disable
+    that reserve. Capacity failures use distinct error codes such as
+    <code>OUTBOX_DATABASE_CAPACITY</code> and <code>OUTBOX_DISK_HEADROOM</code>. Size fields
+    use MB, where one MB is 1,048,576 bytes.
   </p>
 </script>
 
@@ -425,7 +438,8 @@
   <p>
     By default, the persisted payload is <code>msg.payload</code>. Optional job metadata comes
     from <code>msg.outbox</code>, including <code>dedupeKey</code> or retry overrides. The outbox, stable sink key, and retry
-    defaults come from the sink config. A different sink value is rejected.
+    defaults come from the sink config. A different sink value is rejected. Job IDs are
+    generated and managed by the outbox; use <code>dedupeKey</code> for idempotency.
   </p>
   <p>
     An array in <code>msg.payload</code> is one job payload. Use a Split node before enqueue
@@ -448,6 +462,12 @@
     <code>msg.outbox.batch</code> array preserves the corresponding lease metadata. A batch
     message can pass directly through a batch database operation and into
     <code>outbox-settle</code>.
+  </p>
+  <p>
+    Invalid stored payloads are moved to dead letters with failure class
+    <code>outbox-corruption</code>, up to ten per poll, so a poison row cannot permanently
+    block healthy jobs. An unknown payload encoding pauses the sink instead, because it may
+    indicate that a newer writer requires a compatible module version.
   </p>
 </script>
 
@@ -520,6 +540,11 @@
     <dd>
       Set to false to skip the WAL checkpoint during <code>maintenance</code>.
     </dd>
+    <dt class="optional">msg.outbox.full <span class="property-type">boolean</span></dt>
+    <dd>
+      Set to true with <code>check-integrity</code> to run SQLite's full integrity check
+      instead of the faster quick check.
+    </dd>
     <dt class="optional">msg.outbox.deadLetterId <span class="property-type">string</span></dt>
     <dd>
       Identifies the job for <code>requeue-one</code>.
@@ -532,8 +557,8 @@
     <dd>
       Returns counts grouped by sink and state, the total dead-letter count, and circuit-breaker
       state for each known sink. Health also includes queued count, oldest queued age, expired
-      leases, database/WAL bytes, and the configured database-size warning. It does not require
-      a sink.
+      leases, database/WAL bytes, logical database use, reusable bytes, filesystem free space,
+      configured capacity reserves, and startup integrity results. It does not require a sink.
     </dd>
 
     <dt><code>pause</code></dt>
@@ -592,6 +617,13 @@
     <dd>
       Checkpoints the SQLite WAL. Set <code>msg.outbox.vacuum = true</code> to compact the main
       database after retention cleanup; schedule vacuum during a quiet maintenance window.
+    </dd>
+
+    <dt><code>check-integrity</code></dt>
+    <dd>
+      Checks required tables and triggers, compares tracked queue counts with active jobs, and
+      runs SQLite's quick integrity check. It returns <code>ok: false</code> with detailed
+      errors if bookkeeping or database integrity is inconsistent.
     </dd>
   </dl>
 

@@ -23,9 +23,11 @@ test("registers and exercises all outbox nodes", async () => {
     filename: ":memory:",
     maxJobMb: 1.5,
     maxDatabaseMb: 64,
+    minFreeDiskMb: 32,
   });
   assert.equal(config.store.maxJobBytes, 1.5 * 1_048_576);
   assert.equal(config.store.maxDatabaseBytes, 64 * 1_048_576);
+  assert.equal(config.store.minFreeDiskBytes, 32 * 1_048_576);
   harness.instantiate("outbox-sink-config", {
     id: "postgres-sink",
     outbox: "outbox",
@@ -79,6 +81,8 @@ test("registers and exercises all outbox nodes", async () => {
   await harness.input(control);
   assert.equal(control.sent[0].outbox.result.action, "status");
   assert.equal(control.sent[0].payload.jobs[0].state, "delivered");
+  await harness.input(control, { outbox: { action: "check-integrity" } });
+  assert.equal(control.sent[1].payload.ok, true);
 
   await harness.close(enqueue);
   await harness.close(claim);
@@ -309,6 +313,13 @@ test("fixed-sink enqueue rejects a mismatched durable sink key", async () => {
       outbox: { sink: "fieldkit" },
     }),
     /does not match configured sink/
+  );
+  await assert.rejects(
+    harness.input(enqueue, {
+      payload: { value: 1 },
+      outbox: { id: "caller-controlled" },
+    }),
+    (error) => error.code === "OUTBOX_MANAGED_ID"
   );
   assert.equal(config.store.stats().health.queued, 0);
   await harness.close(config);

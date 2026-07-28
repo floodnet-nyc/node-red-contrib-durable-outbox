@@ -11,6 +11,13 @@ module.exports = function registerOutboxNodes(RED) {
     return Math.max(1, Math.round(normalized * 1_048_576));
   }
 
+  function nonnegativeMegabytesToBytes(value, fallbackMb) {
+    const megabytes = Number(value);
+    const normalized =
+      Number.isFinite(megabytes) && megabytes >= 0 ? megabytes : fallbackMb;
+    return Math.max(0, Math.round(normalized * 1_048_576));
+  }
+
   function DurableOutboxConfigNode(config) {
     RED.nodes.createNode(this, config);
     this.filename = config.filename;
@@ -19,6 +26,10 @@ module.exports = function registerOutboxNodes(RED) {
       maxJobBytes: megabytesToBytes(config.maxJobMb, 1),
       maxEnqueueBatch: config.maxEnqueueBatch,
       maxDatabaseBytes: megabytesToBytes(config.maxDatabaseMb, 1_024),
+      minFreeDiskBytes: nonnegativeMegabytesToBytes(
+        config.minFreeDiskMb,
+        256
+      ),
     };
     try {
       this.store = new OutboxStore(this.filename, storeOptions);
@@ -194,11 +205,14 @@ module.exports = function registerOutboxNodes(RED) {
           circuitBreakerEnabled: sinkConfig.circuitBreakerEnabled,
         });
         sinkConfig.notifyQueueDepth();
+        const quarantined = Number(jobs.quarantined) || 0;
         if (jobs.length) {
           node.status({
             fill: "blue",
             shape: "dot",
-            text: `${jobs.length} leased`,
+            text: quarantined
+              ? `${jobs.length} leased, ${quarantined} quarantined`
+              : `${jobs.length} leased`,
           });
           if (outputMode === "batch") {
             send({
@@ -220,6 +234,12 @@ module.exports = function registerOutboxNodes(RED) {
               });
             }
           }
+        } else if (quarantined) {
+          node.status({
+            fill: "red",
+            shape: "dot",
+            text: `${quarantined} quarantined`,
+          });
         } else {
           const control = store.getSinkControl(sink);
           if (control.manuallyPaused) {
@@ -546,6 +566,12 @@ module.exports = function registerOutboxNodes(RED) {
               vacuum: shell.vacuum === true,
             });
             break;
+          case "check-integrity":
+            result = store.checkIntegrity({
+              sqlite: true,
+              full: shell.full === true,
+            });
+            break;
           default:
             throw new Error(`Unsupported outbox control action: ${action}`);
         }
@@ -555,7 +581,7 @@ module.exports = function registerOutboxNodes(RED) {
         msg.outbox.result = { action, sink: sink || null, result };
         msg.payload = result;
         node.status({
-          fill: "green",
+          fill: result?.ok === false ? "red" : "green",
           shape: "dot",
           text: sink ? `${action} ${sink}` : action,
         });

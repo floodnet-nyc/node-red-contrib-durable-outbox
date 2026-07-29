@@ -479,7 +479,7 @@
             "eee020ae284ef244"
         ],
         "x": 34,
-        "y": 39,
+        "y": 279,
         "w": 762,
         "h": 82
     },
@@ -501,10 +501,29 @@
             "84945b5a7bd053d0",
             "34d2d539f11870f6"
         ],
-        "x": 64,
-        "y": 379,
+        "x": 44,
+        "y": 399,
         "w": 702,
         "h": 202
+    },
+    {
+        "id": "96274cfe69e9889a",
+        "type": "group",
+        "z": "32e3cba513b07c09",
+        "name": "1. Data Generation — create readings",
+        "style": {
+            "label": true
+        },
+        "nodes": [
+            "4132e89b866d338b",
+            "dd3ba88904182db2",
+            "1f0534b70717373a",
+            "2f31c19e32a6c690"
+        ],
+        "x": 24,
+        "y": 59,
+        "w": 452,
+        "h": 122
     },
     {
         "id": "outbox-config",
@@ -1365,7 +1384,7 @@
         "onceDelay": 0.1,
         "topic": "",
         "x": 180,
-        "y": 80,
+        "y": 320,
         "wires": [
             [
                 "563a066a8c4bbd98"
@@ -1384,7 +1403,7 @@
         "rowsPerMsg": 1,
         "outputs": 1,
         "x": 440,
-        "y": 80,
+        "y": 320,
         "wires": [
             [
                 "eee020ae284ef244"
@@ -1406,7 +1425,7 @@
         "statusVal": "\"ready\"",
         "statusType": "jsonata",
         "x": 670,
-        "y": 80,
+        "y": 320,
         "wires": []
     },
     {
@@ -1421,8 +1440,8 @@
         "once": true,
         "onceDelay": 3,
         "topic": "",
-        "x": 190,
-        "y": 420,
+        "x": 170,
+        "y": 440,
         "wires": [
             [
                 "4d0b744d9385faa5"
@@ -1440,8 +1459,8 @@
         "failureClass": "",
         "limit": 100,
         "olderThanMs": 86400000,
-        "x": 380,
-        "y": 420,
+        "x": 360,
+        "y": 440,
         "wires": [
             [
                 "8e2e720e8fae72ed"
@@ -1462,8 +1481,8 @@
         "targetType": "msg",
         "statusVal": "payload.health.queued & \" queued\"",
         "statusType": "jsonata",
-        "x": 620,
-        "y": 420,
+        "x": 600,
+        "y": 440,
         "wires": []
     },
     {
@@ -1478,8 +1497,8 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 210,
-        "y": 480,
+        "x": 190,
+        "y": 500,
         "wires": [
             [
                 "3ab28c9394f50ec6"
@@ -1497,8 +1516,8 @@
         "failureClass": "",
         "limit": 100,
         "olderThanMs": 86400000,
-        "x": 420,
-        "y": 480,
+        "x": 400,
+        "y": 500,
         "wires": [
             []
         ]
@@ -1515,8 +1534,8 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 190,
-        "y": 540,
+        "x": 170,
+        "y": 560,
         "wires": [
             [
                 "84945b5a7bd053d0"
@@ -1534,8 +1553,8 @@
         "failureClass": "",
         "limit": 100,
         "olderThanMs": 86400000,
-        "x": 370,
-        "y": 540,
+        "x": 350,
+        "y": 560,
         "wires": [
             [
                 "34d2d539f11870f6"
@@ -1556,14 +1575,15 @@
         "targetType": "msg",
         "statusVal": "payload.count & \" dead\"",
         "statusType": "jsonata",
-        "x": 630,
-        "y": 540,
+        "x": 610,
+        "y": 560,
         "wires": []
     },
     {
         "id": "4132e89b866d338b",
         "type": "inject",
         "z": "32e3cba513b07c09",
+        "g": "96274cfe69e9889a",
         "name": "5 readings/sec",
         "props": [],
         "repeat": "0.2",
@@ -1571,8 +1591,8 @@
         "once": true,
         "onceDelay": 1,
         "topic": "",
-        "x": 170,
-        "y": 200,
+        "x": 150,
+        "y": 100,
         "wires": [
             [
                 "dd3ba88904182db2"
@@ -1583,6 +1603,7 @@
         "id": "dd3ba88904182db2",
         "type": "function",
         "z": "32e3cba513b07c09",
+        "g": "96274cfe69e9889a",
         "name": "Build WritePlan v1",
         "func": "const sequence = context.get(\"sequence\") || 0;\ncontext.set(\"sequence\", sequence + 1);\n\nconst deviceId = \"nosql-sensor-1\";\nconst observedAt = new Date().toISOString();\nconst eventId = \"demo:\" + deviceId + \":\" + observedAt;\n\nmsg.payload = {\n    version: 1,\n    eventId,\n    writes: {\n        sensor_readings: [{\n            device_id: deviceId,\n            observed_at: observedAt,\n            value_mm: 100 + (sequence % 50)\n        }],\n        sensor_health: [{\n            device_id: deviceId,\n            observed_at: observedAt,\n            batt_mv: 4100 - (sequence % 100),\n            rssi_dbm: -70 - (sequence % 20)\n        }]\n    }\n};\nmsg.outbox = {\n    dedupeKey: \"postgres-plan:v1:\" + eventId\n};\nreturn msg;",
         "outputs": 1,
@@ -1591,8 +1612,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 370,
-        "y": 200,
+        "x": 350,
+        "y": 100,
         "wires": [
             [
                 "d43de4ce5526e3ca"
@@ -1603,6 +1624,7 @@
         "id": "1f0534b70717373a",
         "type": "inject",
         "z": "32e3cba513b07c09",
+        "g": "96274cfe69e9889a",
         "name": "enqueue invalid plan",
         "props": [],
         "repeat": "",
@@ -1610,8 +1632,8 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 180,
-        "y": 240,
+        "x": 160,
+        "y": 140,
         "wires": [
             [
                 "2f31c19e32a6c690"
@@ -1622,6 +1644,7 @@
         "id": "2f31c19e32a6c690",
         "type": "function",
         "z": "32e3cba513b07c09",
+        "g": "96274cfe69e9889a",
         "name": "Missing value_mm",
         "func": "const observedAt = new Date().toISOString();\nconst eventId = \"invalid:\" + observedAt;\nmsg.payload = {\n    version: 1,\n    eventId,\n    writes: {\n        sensor_readings: [{\n            device_id: \"nosql-sensor-invalid\",\n            observed_at: observedAt\n        }]\n    }\n};\nmsg.outbox = {\n    dedupeKey: \"postgres-plan:v1:\" + eventId\n};\nreturn msg;",
         "outputs": 1,
@@ -1630,8 +1653,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 380,
-        "y": 240,
+        "x": 360,
+        "y": 140,
         "wires": [
             [
                 "d43de4ce5526e3ca"
@@ -1655,8 +1678,8 @@
                 "type": "conf-type"
             }
         ],
-        "x": 620,
-        "y": 220,
+        "x": 600,
+        "y": 120,
         "wires": [
             [],
             [],
@@ -1677,8 +1700,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 800,
-        "y": 200,
+        "x": 780,
+        "y": 100,
         "wires": []
     },
     {
@@ -1693,8 +1716,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 800,
-        "y": 240,
+        "x": 780,
+        "y": 140,
         "wires": []
     },
     {
@@ -1709,8 +1732,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 800,
-        "y": 280,
+        "x": 780,
+        "y": 180,
         "wires": []
     },
     {

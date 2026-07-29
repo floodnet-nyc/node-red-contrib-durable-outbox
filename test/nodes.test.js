@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const vm = require("node:vm");
 const { createHarness } = require("./helpers/node-red-harness");
 
 test("registers and exercises all outbox nodes", async () => {
@@ -272,7 +273,10 @@ test("batch claim preserves leases and batch settle partitions outcomes", async 
 
   batch.outbox.circuitFailure = true;
   batch.outbox.failureClass = "postgres-connectivity";
-  batch.outbox.error = "connection timed out";
+  batch.outbox.error = vm.runInNewContext(`({
+    message: "PostgreSQL batch failed",
+    payload: { cause: new Error("connection timed out") }
+  })`);
   await harness.input(settle, batch);
 
   const [active, dead] = settle.sent[0];
@@ -284,6 +288,11 @@ test("batch claim preserves leases and batch settle partitions outcomes", async 
   assert.equal(
     config.store.getSinkControl("postgres").consecutiveFailures,
     1
+  );
+  assert.equal(
+    JSON.parse(config.store.getJob(active.outbox.batch[0].id).lastError)
+      .payload.cause.message,
+    "connection timed out"
   );
   assert.equal(config.store.listDeadLetters().length, 1);
 

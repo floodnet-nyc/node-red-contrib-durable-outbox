@@ -7,7 +7,11 @@ const { join } = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 const { DatabaseSync } = require("node:sqlite");
-const { OutboxStore, stableStringify } = require("../lib/outbox-store");
+const {
+  OutboxStore,
+  serializeError,
+  stableStringify,
+} = require("../lib/outbox-store");
 
 function withStore(t, options = {}) {
   const directory = mkdtempSync(join(tmpdir(), "durable-outbox-"));
@@ -31,6 +35,40 @@ test("stableStringify canonicalizes object keys", () => {
     stableStringify({ z: 1, a: { d: 4, b: 2 } }),
     '{"a":{"b":2,"d":4},"z":1}'
   );
+});
+
+test("error serialization tolerates nested cross-realm Error causes", (t) => {
+  const wrapped = vm.runInNewContext(`({
+    message: "PostgreSQL request failed",
+    payload: {
+      code: "ETIMEDOUT",
+      cause: new Error("socket timeout")
+    }
+  })`);
+  wrapped.payload.cause.cause = wrapped;
+
+  const serialized = serializeError(wrapped);
+  const details = JSON.parse(serialized);
+  assert.equal(details.message, "PostgreSQL request failed");
+  assert.equal(details.payload.code, "ETIMEDOUT");
+  assert.equal(details.payload.cause.name, "Error");
+  assert.equal(details.payload.cause.message, "socket timeout");
+  assert.equal(details.payload.cause.cause, "[Circular]");
+
+  const store = withStore(t);
+  const [queued] = store.enqueue({
+    sink: "postgres",
+    payload: { value: 1 },
+  });
+  store.claim({ sink: "postgres" });
+  const result = settle(store, queued.id, {
+    success: false,
+    retryable: true,
+    error: wrapped,
+  });
+
+  assert.equal(result.state, "pending");
+  assert.deepEqual(JSON.parse(store.getJob(queued.id).lastError), details);
 });
 
 test("migrates databases created by the original schema", (t) => {

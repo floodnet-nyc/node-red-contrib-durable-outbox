@@ -23,14 +23,6 @@
         "env": []
     },
     {
-        "id": "18efa87b2fc293ed",
-        "type": "tab",
-        "label": "Flow 1",
-        "disabled": false,
-        "info": "",
-        "env": []
-    },
-    {
         "id": "demo-flow",
         "type": "tab",
         "label": "Durable PostgreSQL outbox demo",
@@ -56,8 +48,8 @@
         ],
         "out": [
             {
-                "x": 300,
-                "y": 120,
+                "x": 370,
+                "y": 40,
                 "wires": [
                     {
                         "id": "5760120cf3329913",
@@ -66,8 +58,8 @@
                 ]
             },
             {
-                "x": 780,
-                "y": 100,
+                "x": 860,
+                "y": 120,
                 "wires": [
                     {
                         "id": "e059616926ccd33a",
@@ -75,25 +67,25 @@
                     }
                 ]
             },
-    {
-      "x": 780,
-      "y": 160,
-      "wires": [
-        {
-          "id": "e059616926ccd33a",
-          "port": 1
-        }
-      ]
-    },
-    {
-      "x": 300,
-      "y": 180,
-      "wires": [
-        {
-          "id": "5760120cf3329913",
-          "port": 1
-        }
-      ]
+            {
+                "x": 810,
+                "y": 180,
+                "wires": [
+                    {
+                        "id": "e059616926ccd33a",
+                        "port": 1
+                    }
+                ]
+            },
+            {
+                "x": 570,
+                "y": 40,
+                "wires": [
+                    {
+                        "id": "5760120cf3329913",
+                        "port": 1
+                    }
+                ]
             }
         ],
         "env": [
@@ -110,15 +102,15 @@
                 }
             }
         ],
-  "meta": {},
-  "color": "#D8BFD8",
-  "outputLabels": [
-    "durably accepted",
-    "delivered or retry scheduled",
-    "dead letter",
-    "not persisted"
-  ],
-  "status": {
+        "meta": {},
+        "color": "#D8BFD8",
+        "outputLabels": [
+            "durably accepted",
+            "delivered or retry scheduled",
+            "dead letter",
+            "not persisted"
+        ],
+        "status": {
             "x": 600,
             "y": 260,
             "wires": [
@@ -137,7 +129,7 @@
         "category": "",
         "in": [
             {
-                "x": 160,
+                "x": 100,
                 "y": 120,
                 "wires": [
                     {
@@ -158,7 +150,7 @@
                 ]
             },
             {
-                "x": 1020,
+                "x": 1100,
                 "y": 100,
                 "wires": [
                     {
@@ -167,25 +159,25 @@
                     }
                 ]
             },
-    {
-      "x": 1020,
-      "y": 160,
-      "wires": [
-        {
-          "id": "8ca22616ab49947e",
-          "port": 1
-        }
-      ]
-    },
-    {
-      "x": 480,
-      "y": 220,
-      "wires": [
-        {
-          "id": "cb45b49ed915bf00",
-          "port": 1
-        }
-      ]
+            {
+                "x": 1050,
+                "y": 160,
+                "wires": [
+                    {
+                        "id": "8ca22616ab49947e",
+                        "port": 1
+                    }
+                ]
+            },
+            {
+                "x": 470,
+                "y": 240,
+                "wires": [
+                    {
+                        "id": "cb45b49ed915bf00",
+                        "port": 1
+                    }
+                ]
             }
         ],
         "env": [
@@ -212,15 +204,15 @@
                 }
             }
         ],
-  "meta": {},
-  "color": "#D8BFD8",
-  "outputLabels": [
-    "durably accepted",
-    "delivered or retry scheduled",
-    "dead letter",
-    "not persisted"
-  ],
-  "status": {
+        "meta": {},
+        "color": "#D8BFD8",
+        "outputLabels": [
+            "durably accepted",
+            "delivered or retry scheduled",
+            "dead letter",
+            "not persisted"
+        ],
+        "status": {
             "x": 1000,
             "y": 260,
             "wires": [
@@ -250,8 +242,8 @@
         ],
         "out": [
             {
-                "x": 320,
-                "y": 120,
+                "x": 430,
+                "y": 40,
                 "wires": [
                     {
                         "id": "70d6f74028c9ec23",
@@ -260,7 +252,7 @@
                 ]
             },
             {
-                "x": 840,
+                "x": 940,
                 "y": 100,
                 "wires": [
                     {
@@ -269,25 +261,25 @@
                     }
                 ]
             },
-    {
-      "x": 840,
-      "y": 160,
-      "wires": [
-        {
-          "id": "c2622688969a0bfb",
-          "port": 1
-        }
-      ]
-    },
-    {
-      "x": 320,
-      "y": 220,
-      "wires": [
-        {
-          "id": "70d6f74028c9ec23",
-          "port": 1
-        }
-      ]
+            {
+                "x": 890,
+                "y": 160,
+                "wires": [
+                    {
+                        "id": "c2622688969a0bfb",
+                        "port": 1
+                    }
+                ]
+            },
+            {
+                "x": 410,
+                "y": 240,
+                "wires": [
+                    {
+                        "id": "70d6f74028c9ec23",
+                        "port": 1
+                    }
+                ]
             }
         ],
         "env": [
@@ -314,15 +306,15 @@
                 }
             }
         ],
-  "meta": {},
-  "color": "#D8BFD8",
-  "outputLabels": [
-    "durably accepted",
-    "delivered or retry scheduled",
-    "dead letter",
-    "not persisted"
-  ],
-  "status": {
+        "meta": {},
+        "color": "#D8BFD8",
+        "outputLabels": [
+            "durably accepted",
+            "delivered or retry scheduled",
+            "dead letter",
+            "not persisted"
+        ],
+        "status": {
             "x": 760,
             "y": 280,
             "wires": [
@@ -350,10 +342,10 @@
             "delivered-debug",
             "dead-debug",
             "postgres-catch",
-    "classify-postgres",
-    "enqueue-postgres",
-    "queued-debug",
-    "enqueue-rejected-debug"
+            "classify-postgres",
+            "enqueue-postgres",
+            "queued-debug",
+            "enqueue-rejected-debug"
         ],
         "x": 294,
         "y": 319,
@@ -515,7 +507,8 @@
             "15e6460c20999bf6",
             "a177cc8ac10c088d",
             "8ca22616ab49947e",
-            "cb45b49ed915bf00"
+            "cb45b49ed915bf00",
+            "f5e763712a3a13dd"
         ],
         "x": 34,
         "y": 79,
@@ -612,9 +605,9 @@
             "39b77937b067d67c",
             "a59b74c95f41f9a7"
         ],
-        "x": 114,
+        "x": 94,
         "y": 399,
-        "w": 492,
+        "w": 512,
         "h": 82
     },
     {
@@ -629,9 +622,9 @@
             "43b355dd3c9d8367",
             "43ecd0374731df57"
         ],
-        "x": 214,
+        "x": 194,
         "y": 439,
-        "w": 492,
+        "w": 512,
         "h": 82
     },
     {
@@ -646,9 +639,26 @@
             "9df766416db8979b",
             "0d037b55fe14e062"
         ],
-        "x": 114,
+        "x": 94,
         "y": 439,
-        "w": 492,
+        "w": 512,
+        "h": 82
+    },
+    {
+        "id": "error-demo-group",
+        "type": "group",
+        "z": "32e3cba513b07c09",
+        "name": "2. Durable error logging",
+        "style": {
+            "label": true
+        },
+        "nodes": [
+            "error-demo-inject",
+            "error-demo-build"
+        ],
+        "x": 1074,
+        "y": 319,
+        "w": 512,
         "h": 82
     },
     {
@@ -808,6 +818,24 @@
         "circuitBreakerCooldownMs": 30000
     },
     {
+        "id": "1ebe9c435c96c58d",
+        "type": "outbox-sink-config",
+        "name": "",
+        "outbox": "outbox-config",
+        "sinkKey": "errors",
+        "leaseMs": 60000,
+        "maxInFlight": 10,
+        "batchSize": 10,
+        "maxAttempts": 10,
+        "retryUntilExpired": "true",
+        "maxAgeMs": 86400000,
+        "baseDelayMs": 2000,
+        "maxDelayMs": 300000,
+        "circuitBreakerEnabled": true,
+        "circuitBreakerThreshold": 3,
+        "circuitBreakerCooldownMs": 30000
+    },
+    {
         "id": "ad5d572c4a69b196",
         "type": "inject",
         "z": "629498338552fa25",
@@ -949,6 +977,7 @@
         "x": 200,
         "y": 120,
         "wires": [
+            [],
             []
         ]
     },
@@ -1043,11 +1072,11 @@
         "name": "Claim plans",
         "sink": "${OUTBOX_SINK}",
         "outputMode": "batch",
-        "x": 280,
+        "x": 270,
         "y": 160,
         "wires": [
             [
-                "5613daa644e09feb"
+                "f5e763712a3a13dd"
             ]
         ]
     },
@@ -1056,15 +1085,15 @@
         "type": "function",
         "z": "5143175b934accee",
         "g": "5838c5d2ed571f1b",
-        "name": "Validate + compile registry",
-        "func": "const PLAN_VERSION = 1;\n\nconst TYPES = {\n    text: {\n        sql: \"text\",\n        validate: value => typeof value === \"string\" && value.length > 0\n    },\n    integer: {\n        sql: \"integer\",\n        validate: Number.isInteger\n    },\n    float: {\n        sql: \"double precision\",\n        validate: Number.isFinite\n    },\n    timestamptz: {\n        sql: \"timestamptz\",\n        validate: value =>\n            typeof value === \"string\" && Number.isFinite(Date.parse(value))\n    }\n};\n\nconst REGISTRY = {\n    sensor_readings: {\n        columns: {\n            device_id: { type: \"text\", required: true },\n            observed_at: { type: \"timestamptz\", required: true },\n            value_mm: { type: \"float\", required: true }\n        },\n        conflict: [\"device_id\", \"observed_at\"],\n        update: [\"value_mm\"],\n        order: 10\n    },\n    sensor_health: {\n        columns: {\n            device_id: { type: \"text\", required: true },\n            observed_at: { type: \"timestamptz\", required: true },\n            batt_mv: { type: \"integer\", required: true },\n            rssi_dbm: { type: \"float\", required: true }\n        },\n        conflict: [\"device_id\", \"observed_at\"],\n        update: [\"batt_mv\", \"rssi_dbm\"],\n        order: 20\n    }\n};\n\nconst identifierPattern = /^[A-Za-z_][A-Za-z0-9_]*$/;\nconst plainObject = value => {\n    if (value == null || typeof value !== \"object\" || Array.isArray(value)) {\n        return false;\n    }\n    const prototype = Object.getPrototypeOf(value);\n    return prototype === null || Object.getPrototypeOf(prototype) === null;\n};\n\nfunction validateRegistry() {\n    for (const [table, definition] of Object.entries(REGISTRY)) {\n        if (!identifierPattern.test(table)) {\n            return \"invalid table identifier \" + table;\n        }\n        if (!plainObject(definition) || !plainObject(definition.columns)) {\n            return table + \" must define columns\";\n        }\n\n        const columns = Object.keys(definition.columns);\n        if (!columns.length) return table + \" must define at least one column\";\n        for (const [column, specification] of Object.entries(definition.columns)) {\n            if (!identifierPattern.test(column)) {\n                return table + \" has invalid column identifier \" + column;\n            }\n            if (!plainObject(specification) || !TYPES[specification.type]) {\n                return table + \".\" + column + \" has an unknown type\";\n            }\n            if (specification.required !== true) {\n                return table + \".\" + column +\n                    \" must be required; optional-column semantics are not defined\";\n            }\n        }\n\n        if (!Array.isArray(definition.conflict) || !definition.conflict.length) {\n            return table + \" must define a conflict key\";\n        }\n        if (!definition.conflict.every(column => columns.includes(column))) {\n            return table + \" conflict key references an unknown column\";\n        }\n        if (!Array.isArray(definition.update)) {\n            return table + \" must define an explicit update list\";\n        }\n        if (!definition.update.every(column =>\n            columns.includes(column) && !definition.conflict.includes(column)\n        )) {\n            return table + \" update list is unknown or overlaps its conflict key\";\n        }\n        if (!Number.isFinite(definition.order)) {\n            return table + \" must define a finite order\";\n        }\n    }\n    return null;\n}\n\nfunction validatePlan(plan) {\n    if (!plainObject(plan)) return \"plan must be an object\";\n    if (plan.version !== PLAN_VERSION) {\n        return \"unsupported plan version \" + plan.version;\n    }\n    if (typeof plan.eventId !== \"string\" || !plan.eventId) {\n        return \"eventId must be a non-empty string\";\n    }\n    if (!plainObject(plan.writes) || !Object.keys(plan.writes).length) {\n        return \"writes must contain at least one registered table\";\n    }\n\n    for (const [table, rows] of Object.entries(plan.writes)) {\n        const definition = REGISTRY[table];\n        if (!definition) return \"table \" + table + \" is not registered\";\n        if (!Array.isArray(rows) || !rows.length) {\n            return table + \" must contain at least one row\";\n        }\n\n        for (const [index, row] of rows.entries()) {\n            if (!plainObject(row)) {\n                return table + \"[\" + index + \"] must be an object\";\n            }\n            const unknown = Object.keys(row).filter(\n                column => !Object.hasOwn(definition.columns, column)\n            );\n            if (unknown.length) {\n                return table + \"[\" + index + \"] has unknown columns: \" +\n                    unknown.join(\", \");\n            }\n            for (const [column, specification] of Object.entries(definition.columns)) {\n                if (!Object.hasOwn(row, column) || row[column] == null) {\n                    return table + \"[\" + index + \"].\" + column + \" is required\";\n                }\n                if (!TYPES[specification.type].validate(row[column])) {\n                    return table + \"[\" + index + \"].\" + column +\n                        \" must be \" + specification.type;\n                }\n            }\n        }\n    }\n    return null;\n}\n\nconst plans = Array.isArray(msg.payload) ? msg.payload : [];\nconst leases = msg.outbox?.batch;\nconst registryError = validateRegistry();\nif (registryError) {\n    msg.outbox = {\n        ...msg.outbox,\n        retryable: true,\n        circuitFailure: true,\n        failureClass: \"configuration\",\n        error: \"Invalid write-plan registry: \" + registryError\n    };\n    return [null, msg];\n}\nif (!Array.isArray(leases) || plans.length !== leases.length) {\n    msg.outbox = {\n        ...msg.outbox,\n        retryable: true,\n        circuitFailure: true,\n        failureClass: \"configuration\",\n        error: \"Claim payload and lease metadata are not aligned\"\n    };\n    return [null, msg];\n}\n\nconst validPlans = [];\nconst validLeases = [];\nconst invalidPlans = [];\nconst invalidLeases = [];\nconst validationErrors = [];\n\nplans.forEach((plan, index) => {\n    const error = validatePlan(plan);\n    if (error) {\n        invalidPlans.push(plan);\n        invalidLeases.push(leases[index]);\n        validationErrors.push({\n            id: leases[index]?.id,\n            eventId: plan?.eventId,\n            error\n        });\n    } else {\n        validPlans.push(plan);\n        validLeases.push(leases[index]);\n    }\n});\n\nlet invalidMessage = null;\nif (invalidPlans.length) {\n    invalidMessage = {\n        ...msg,\n        payload: invalidPlans,\n        outbox: {\n            ...msg.outbox,\n            batch: invalidLeases,\n            retryable: false,\n            circuitFailure: false,\n            failureClass: \"data\",\n            error: JSON.stringify(validationErrors),\n            validationErrors\n        }\n    };\n}\nif (!validPlans.length) return [null, invalidMessage];\n\nconst rowsByTable = Object.fromEntries(\n    Object.keys(REGISTRY).map(table => [table, []])\n);\nfor (const plan of validPlans) {\n    for (const [table, rows] of Object.entries(plan.writes)) {\n        rowsByTable[table].push(...rows);\n    }\n}\nfor (const [table, definition] of Object.entries(REGISTRY)) {\n    const deduplicated = new Map();\n    for (const row of rowsByTable[table]) {\n        const key = JSON.stringify(\n            definition.conflict.map(column => row[column])\n        );\n        deduplicated.set(key, row);\n    }\n    rowsByTable[table] = [...deduplicated.values()];\n}\n\nconst quoteIdentifier = value => '\"' + value.replaceAll('\"', '\"\"') + '\"';\nconst quoteLiteral = value => \"'\" + value.replaceAll(\"'\", \"''\") + \"'\";\nconst definitions = Object.entries(REGISTRY)\n    .sort(([, left], [, right]) => left.order - right.order);\nconst ctes = [\"input(doc) AS (VALUES ($1::jsonb))\"];\n\nfor (const [index, [table, definition]] of definitions.entries()) {\n    const columns = Object.keys(definition.columns);\n    const recordDefinition = columns\n        .map(column => quoteIdentifier(column) + \" \" +\n            TYPES[definition.columns[column].type].sql)\n        .join(\", \");\n    const selectedColumns = columns\n        .map(column => \"row_data.\" + quoteIdentifier(column))\n        .join(\", \");\n    const conflict = definition.conflict.map(quoteIdentifier).join(\", \");\n    const action = definition.update.length\n        ? \"UPDATE SET \" + definition.update\n            .map(column => {\n                const quoted = quoteIdentifier(column);\n                return quoted + \" = EXCLUDED.\" + quoted;\n            })\n            .join(\", \")\n        : \"NOTHING\";\n\n    ctes.push(\"upsert_\" + index + \" AS (\\n\" +\n        \"        INSERT INTO \" + quoteIdentifier(table) +\n        \" (\" + columns.map(quoteIdentifier).join(\", \") + \")\\n\" +\n        \"        SELECT \" + selectedColumns + \"\\n\" +\n        \"        FROM input\\n\" +\n        \"        CROSS JOIN LATERAL jsonb_to_recordset(\\n\" +\n        \"            COALESCE(input.doc -> \" + quoteLiteral(table) +\n        \", '[]'::jsonb)\\n\" +\n        \"        ) AS row_data(\" + recordDefinition + \")\\n\" +\n        \"        ON CONFLICT (\" + conflict + \") DO \" + action + \"\\n\" +\n        \"        RETURNING 1\\n\" +\n        \"    )\");\n}\n\nconst counts = definitions\n    .map(([table], index) =>\n        quoteLiteral(table) + \", (SELECT COUNT(*) FROM upsert_\" + index + \")\"\n    )\n    .join(\", \");\n\nmsg.query = \"WITH\\n\" + ctes.join(\",\\n\") +\n    \"\\nSELECT jsonb_build_object(\" + counts + \") AS affected;\";\nmsg.params = [JSON.stringify(rowsByTable)];\nmsg.payload = validPlans;\nmsg.outbox = {\n    ...msg.outbox,\n    batch: validLeases,\n    planVersion: PLAN_VERSION,\n    planSummary: {\n        plans: validPlans.length,\n        rows: Object.fromEntries(\n            Object.entries(rowsByTable).map(([table, rows]) => [\n                table,\n                rows.length\n            ])\n        )\n    }\n};\nreturn [msg, invalidMessage];",
+        "name": "Compile",
+        "func": "const PLAN_VERSION = 1;\n\nconst TYPES = {\n    text: {\n        sql: \"text\",\n        validate: value => typeof value === \"string\" && value.length > 0\n    },\n    integer: {\n        sql: \"integer\",\n        validate: Number.isInteger\n    },\n    float: {\n        sql: \"double precision\",\n        validate: Number.isFinite\n    },\n    timestamptz: {\n        sql: \"timestamptz\",\n        validate: value =>\n            typeof value === \"string\" && Number.isFinite(Date.parse(value))\n    },\n    jsonb: {\n        sql: \"jsonb\",\n        validate: value => {\n            if (value === undefined) return false;\n            try {\n                JSON.stringify(value);\n                return true;\n            } catch {\n                return false;\n            }\n        }\n    },\n    ...msg.TYPES\n};\n\nconst REGISTRY = {\n    ...msg.REGISTRY,\n};\n\nconst identifierPattern = /^[A-Za-z_][A-Za-z0-9_]*$/;\nconst plainObject = value => {\n    if (value == null || typeof value !== \"object\" || Array.isArray(value)) {\n        return false;\n    }\n    const prototype = Object.getPrototypeOf(value);\n    return prototype === null || Object.getPrototypeOf(prototype) === null;\n};\n\nfunction validateRegistry() {\n    for (const [table, definition] of Object.entries(REGISTRY)) {\n        if (!identifierPattern.test(table)) {\n            return \"invalid table identifier \" + table;\n        }\n        if (!plainObject(definition) || !plainObject(definition.columns)) {\n            return table + \" must define columns\";\n        }\n\n        const columns = Object.keys(definition.columns);\n        if (!columns.length) return table + \" must define at least one column\";\n        for (const [column, specification] of Object.entries(definition.columns)) {\n            if (!identifierPattern.test(column)) {\n                return table + \" has invalid column identifier \" + column;\n            }\n            if (!plainObject(specification) || !TYPES[specification.type]) {\n                return table + \".\" + column + \" has an unknown type\";\n            }\n            if (specification.required !== true) {\n                return table + \".\" + column +\n                    \" must be required; optional-column semantics are not defined\";\n            }\n        }\n\n        if (!Array.isArray(definition.conflict) || !definition.conflict.length) {\n            return table + \" must define a conflict key\";\n        }\n        if (!definition.conflict.every(column => columns.includes(column))) {\n            return table + \" conflict key references an unknown column\";\n        }\n        if (!Array.isArray(definition.update)) {\n            return table + \" must define an explicit update list\";\n        }\n        if (!definition.update.every(column =>\n            columns.includes(column) && !definition.conflict.includes(column)\n        )) {\n            return table + \" update list is unknown or overlaps its conflict key\";\n        }\n        if (!Number.isFinite(definition.order)) {\n            return table + \" must define a finite order\";\n        }\n    }\n    return null;\n}\n\nfunction validatePlan(plan) {\n    if (!plainObject(plan)) return \"plan must be an object\";\n    if ((plan.version ?? PLAN_VERSION) !== PLAN_VERSION) {\n        return \"unsupported plan version \" + plan.version;\n    }\n    if (typeof plan.eventId !== \"string\" || !plan.eventId) {\n        return \"eventId must be a non-empty string\";\n    }\n    if (!plainObject(plan.writes) || !Object.keys(plan.writes).length) {\n        return \"writes must contain at least one registered table\";\n    }\n\n    for (const [table, rows] of Object.entries(plan.writes)) {\n        const definition = REGISTRY[table];\n        if (!definition) return \"table \" + table + \" is not registered\";\n        if (!Array.isArray(rows) || !rows.length) {\n            return table + \" must contain at least one row\";\n        }\n\n        for (const [index, row] of rows.entries()) {\n            if (!plainObject(row)) {\n                return table + \"[\" + index + \"] must be an object\";\n            }\n            const unknown = Object.keys(row).filter(\n                column => !Object.hasOwn(definition.columns, column)\n            );\n            if (unknown.length) {\n                return table + \"[\" + index + \"] has unknown columns: \" +\n                    unknown.join(\", \");\n            }\n            for (const [column, specification] of Object.entries(definition.columns)) {\n                if (!Object.hasOwn(row, column) || row[column] == null) {\n                    return table + \"[\" + index + \"].\" + column + \" is required\";\n                }\n                if (!TYPES[specification.type].validate(row[column])) {\n                    return table + \"[\" + index + \"].\" + column +\n                        \" must be \" + specification.type;\n                }\n            }\n        }\n    }\n    return null;\n}\n\nconst plans = Array.isArray(msg.payload) ? msg.payload : [];\nconst leases = msg.outbox?.batch;\nconst registryError = validateRegistry();\nif (registryError) {\n    msg.outbox = {\n        ...msg.outbox,\n        retryable: true,\n        circuitFailure: true,\n        failureClass: \"configuration\",\n        error: \"Invalid write-plan registry: \" + registryError\n    };\n    return [null, msg];\n}\nif (!Array.isArray(leases) || plans.length !== leases.length) {\n    msg.outbox = {\n        ...msg.outbox,\n        retryable: true,\n        circuitFailure: true,\n        failureClass: \"configuration\",\n        error: \"Claim payload and lease metadata are not aligned\"\n    };\n    return [null, msg];\n}\n\nconst validPlans = [];\nconst validLeases = [];\nconst invalidPlans = [];\nconst invalidLeases = [];\nconst validationErrors = [];\n\nplans.forEach((plan, index) => {\n    const error = validatePlan(plan);\n    if (error) {\n        invalidPlans.push(plan);\n        invalidLeases.push(leases[index]);\n        validationErrors.push({\n            id: leases[index]?.id,\n            eventId: plan?.eventId,\n            error\n        });\n    } else {\n        validPlans.push(plan);\n        validLeases.push(leases[index]);\n    }\n});\n\nlet invalidMessage = null;\nif (invalidPlans.length) {\n    invalidMessage = {\n        ...msg,\n        payload: invalidPlans,\n        outbox: {\n            ...msg.outbox,\n            batch: invalidLeases,\n            retryable: false,\n            circuitFailure: false,\n            failureClass: \"data\",\n            error: JSON.stringify(validationErrors),\n            validationErrors\n        }\n    };\n}\nif (!validPlans.length) return [null, invalidMessage];\n\nconst rowsByTable = Object.fromEntries(\n    Object.keys(REGISTRY).map(table => [table, []])\n);\nfor (const plan of validPlans) {\n    for (const [table, rows] of Object.entries(plan.writes)) {\n        rowsByTable[table].push(...rows);\n    }\n}\nfor (const [table, definition] of Object.entries(REGISTRY)) {\n    const deduplicated = new Map();\n    for (const row of rowsByTable[table]) {\n        const key = JSON.stringify(\n            definition.conflict.map(column => row[column])\n        );\n        deduplicated.set(key, row);\n    }\n    rowsByTable[table] = [...deduplicated.values()];\n}\n\nconst quoteIdentifier = value => '\"' + value.replaceAll('\"', '\"\"') + '\"';\nconst quoteLiteral = value => \"'\" + value.replaceAll(\"'\", \"''\") + \"'\";\nconst definitions = Object.entries(REGISTRY)\n    .sort(([, left], [, right]) => left.order - right.order);\nconst ctes = [\"input(doc) AS (VALUES ($1::jsonb))\"];\n\nfor (const [index, [table, definition]] of definitions.entries()) {\n    const columns = Object.keys(definition.columns);\n    const recordDefinition = columns\n        .map(column => quoteIdentifier(column) + \" \" +\n            TYPES[definition.columns[column].type].sql)\n        .join(\", \");\n    const selectedColumns = columns\n        .map(column => \"row_data.\" + quoteIdentifier(column))\n        .join(\", \");\n    const conflict = definition.conflict.map(quoteIdentifier).join(\", \");\n    const action = definition.update.length\n        ? \"UPDATE SET \" + definition.update\n            .map(column => {\n                const quoted = quoteIdentifier(column);\n                return quoted + \" = EXCLUDED.\" + quoted;\n            })\n            .join(\", \")\n        : \"NOTHING\";\n\n    ctes.push(\"upsert_\" + index + \" AS (\\n\" +\n        \"        INSERT INTO \" + quoteIdentifier(table) +\n        \" (\" + columns.map(quoteIdentifier).join(\", \") + \")\\n\" +\n        \"        SELECT \" + selectedColumns + \"\\n\" +\n        \"        FROM input\\n\" +\n        \"        CROSS JOIN LATERAL jsonb_to_recordset(\\n\" +\n        \"            COALESCE(input.doc -> \" + quoteLiteral(table) +\n        \", '[]'::jsonb)\\n\" +\n        \"        ) AS row_data(\" + recordDefinition + \")\\n\" +\n        \"        ON CONFLICT (\" + conflict + \") DO \" + action + \"\\n\" +\n        \"        RETURNING 1\\n\" +\n        \"    )\");\n}\n\nconst counts = definitions\n    .map(([table], index) =>\n        quoteLiteral(table) + \", (SELECT COUNT(*) FROM upsert_\" + index + \")\"\n    )\n    .join(\", \");\n\nmsg.query = \"WITH\\n\" + ctes.join(\",\\n\") +\n    \"\\nSELECT jsonb_build_object(\" + counts + \") AS affected;\";\nmsg.params = [JSON.stringify(rowsByTable)];\nmsg.payload = validPlans;\nmsg.outbox = {\n    ...msg.outbox,\n    batch: validLeases,\n    planVersion: PLAN_VERSION,\n    planSummary: {\n        plans: validPlans.length,\n        rows: Object.fromEntries(\n            Object.entries(rowsByTable).map(([table, rows]) => [\n                table,\n                rows.length\n            ])\n        )\n    }\n};\nreturn [msg, invalidMessage];",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 490,
+        "x": 580,
         "y": 160,
         "wires": [
             [
@@ -1084,13 +1113,13 @@
         "type": "postgresql",
         "z": "5143175b934accee",
         "g": "5838c5d2ed571f1b",
-        "name": "Atomic JSONB upserts",
+        "name": "JSONB upserts",
         "query": "",
         "postgreSQLConfig": "${POSTGRES_CONFIG}",
         "split": false,
         "rowsPerMsg": 1,
         "outputs": 1,
-        "x": 740,
+        "x": 760,
         "y": 160,
         "wires": [
             [
@@ -1164,6 +1193,7 @@
         "x": 290,
         "y": 120,
         "wires": [
+            [],
             []
         ]
     },
@@ -1227,6 +1257,27 @@
         "y": 440,
         "wires": [
             []
+        ]
+    },
+    {
+        "id": "f5e763712a3a13dd",
+        "type": "function",
+        "z": "5143175b934accee",
+        "g": "5838c5d2ed571f1b",
+        "name": "Registry",
+        "func": "msg.REGISTRY = {\n    sensor_readings: {\n        columns: {\n            device_id: { type: \"text\", required: true },\n            observed_at: { type: \"timestamptz\", required: true },\n            value_mm: { type: \"float\", required: true }\n        },\n        conflict: [\"device_id\", \"observed_at\"],\n        update: [\"value_mm\"],\n        order: 10\n    },\n    sensor_health: {\n        columns: {\n            device_id: { type: \"text\", required: true },\n            observed_at: { type: \"timestamptz\", required: true },\n            batt_mv: { type: \"integer\", required: true },\n            rssi_dbm: { type: \"float\", required: true }\n        },\n        conflict: [\"device_id\", \"observed_at\"],\n        update: [\"batt_mv\", \"rssi_dbm\"],\n        order: 20\n    },\n    errors: {\n        columns: {\n            event_id: { type: \"text\", required: true },\n            time: { type: \"timestamptz\", required: true },\n            dev_id: { type: \"text\", required: true },\n            deployment_id: { type: \"text\", required: true },\n            level: { type: \"text\", required: true },\n            message: { type: \"text\", required: true },\n            type: { type: \"text\", required: true },\n            source: { type: \"text\", required: true },\n            data: { type: \"jsonb\", required: true }\n        },\n        conflict: [\"event_id\", \"time\"],\n        update: [],\n        order: 100\n    },\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 440,
+        "y": 160,
+        "wires": [
+            [
+                "5613daa644e09feb"
+            ]
         ]
     },
     {
@@ -1329,6 +1380,7 @@
         "x": 220,
         "y": 120,
         "wires": [
+            [],
             []
         ]
     },
@@ -1510,32 +1562,32 @@
         ],
         "x": 540,
         "y": 120,
-    "wires": [
-      [],
-      [],
-      [],
-      [
-        "durable-rejected-debug"
-      ]
-    ]
-  },
-  {
-    "id": "durable-rejected-debug",
-    "type": "debug",
-    "z": "22a07776c86a0b11",
-    "name": "Not persisted",
-    "active": true,
-    "tosidebar": true,
-    "console": true,
-    "tostatus": true,
-    "complete": "outbox.result",
-    "targetType": "msg",
-    "statusVal": "outbox.result.error.code",
-    "statusType": "msg",
-    "x": 800,
-    "y": 200,
-    "wires": []
-  },
+        "wires": [
+            [],
+            [],
+            [],
+            [
+                "durable-rejected-debug"
+            ]
+        ]
+    },
+    {
+        "id": "durable-rejected-debug",
+        "type": "debug",
+        "z": "22a07776c86a0b11",
+        "name": "Not persisted",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": true,
+        "complete": "outbox.result",
+        "targetType": "msg",
+        "statusVal": "outbox.result.error.code",
+        "statusType": "msg",
+        "x": 800,
+        "y": 200,
+        "wires": []
+    },
     {
         "id": "80fd8f7de7af3a8e",
         "type": "inject",
@@ -1668,34 +1720,34 @@
         ],
         "x": 540,
         "y": 120,
-    "wires": [
-      [],
-      [],
-      [
-        "4ee2e518bb11dc81"
-      ],
-      [
-        "batch-rejected-debug"
-      ]
-    ]
-  },
-  {
-    "id": "batch-rejected-debug",
-    "type": "debug",
-    "z": "f9d60f4c68faa702",
-    "name": "Not persisted",
-    "active": true,
-    "tosidebar": true,
-    "console": true,
-    "tostatus": true,
-    "complete": "outbox.result",
-    "targetType": "msg",
-    "statusVal": "outbox.result.error.code",
-    "statusType": "msg",
-    "x": 800,
-    "y": 200,
-    "wires": []
-  },
+        "wires": [
+            [],
+            [],
+            [
+                "4ee2e518bb11dc81"
+            ],
+            [
+                "batch-rejected-debug"
+            ]
+        ]
+    },
+    {
+        "id": "batch-rejected-debug",
+        "type": "debug",
+        "z": "f9d60f4c68faa702",
+        "name": "Not persisted",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": true,
+        "complete": "outbox.result",
+        "targetType": "msg",
+        "statusVal": "outbox.result.error.code",
+        "statusType": "msg",
+        "x": 800,
+        "y": 200,
+        "wires": []
+    },
     {
         "id": "ee213fa79003e8fc",
         "type": "debug",
@@ -1770,7 +1822,7 @@
         "z": "32e3cba513b07c09",
         "g": "c063d286bb8c24cc",
         "name": "CREATE TABLE IF NOT EXISTS",
-        "query": "CREATE TABLE IF NOT EXISTS sensor_readings (\n    device_id   TEXT NOT NULL,\n    observed_at TIMESTAMPTZ NOT NULL,\n    value_mm    DOUBLE PRECISION NOT NULL,\n    PRIMARY KEY (device_id, observed_at)\n);\n\nCREATE TABLE IF NOT EXISTS sensor_health (\n    device_id   TEXT NOT NULL,\n    observed_at TIMESTAMPTZ NOT NULL,\n    batt_mv     INTEGER NOT NULL,\n    rssi_dbm    DOUBLE PRECISION NOT NULL,\n    PRIMARY KEY (device_id, observed_at)\n);",
+        "query": "CREATE TABLE IF NOT EXISTS sensor_readings (\n    device_id   TEXT NOT NULL,\n    observed_at TIMESTAMPTZ NOT NULL,\n    value_mm    DOUBLE PRECISION NOT NULL,\n    PRIMARY KEY (device_id, observed_at)\n);\n\nCREATE TABLE IF NOT EXISTS sensor_health (\n    device_id   TEXT NOT NULL,\n    observed_at TIMESTAMPTZ NOT NULL,\n    batt_mv     INTEGER NOT NULL,\n    rssi_dbm    DOUBLE PRECISION NOT NULL,\n    PRIMARY KEY (device_id, observed_at)\n);\n\n\nCREATE TABLE IF NOT EXISTS errors (\n    event_id     TEXT NOT NULL,\n    time         TIMESTAMPTZ NOT NULL,\n    dev_id       TEXT NOT NULL,\n    deployment_id TEXT NOT NULL,\n    level        TEXT NOT NULL,\n    message      TEXT NOT NULL,\n    type         TEXT NOT NULL,\n    source       TEXT NOT NULL,\n    data         JSONB NOT NULL,\n    UNIQUE (event_id, time)\n);",
         "postgreSQLConfig": "nosql-postgres-config",
         "split": false,
         "rowsPerMsg": 1,
@@ -1989,7 +2041,7 @@
         "y": 100,
         "wires": [
             [
-                "6f345136206c588b"
+                "e1cfb82691344797"
             ]
         ]
     },
@@ -2051,36 +2103,36 @@
                 "type": "conf-type"
             }
         ],
-        "x": 680,
+        "x": 760,
         "y": 120,
-    "wires": [
-      [],
-      [],
-      [
-        "8efa66cdd619974a"
-      ],
-      [
-        "nosql-rejected-debug"
-      ]
-    ]
-  },
-  {
-    "id": "nosql-rejected-debug",
-    "type": "debug",
-    "z": "32e3cba513b07c09",
-    "name": "Not persisted",
-    "active": true,
-    "tosidebar": true,
-    "console": true,
-    "tostatus": true,
-    "complete": "outbox.result",
-    "targetType": "msg",
-    "statusVal": "outbox.result.error.code",
-    "statusType": "msg",
-    "x": 940,
-    "y": 200,
-    "wires": []
-  },
+        "wires": [
+            [],
+            [],
+            [
+                "8efa66cdd619974a"
+            ],
+            [
+                "nosql-rejected-debug"
+            ]
+        ]
+    },
+    {
+        "id": "nosql-rejected-debug",
+        "type": "debug",
+        "z": "32e3cba513b07c09",
+        "name": "Not persisted",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": true,
+        "complete": "outbox.result",
+        "targetType": "msg",
+        "statusVal": "outbox.result.error.code",
+        "statusType": "msg",
+        "x": 960,
+        "y": 220,
+        "wires": []
+    },
     {
         "id": "11f0c281e75d79de",
         "type": "debug",
@@ -2093,7 +2145,7 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 860,
+        "x": 940,
         "y": 100,
         "wires": []
     },
@@ -2109,7 +2161,7 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 860,
+        "x": 940,
         "y": 140,
         "wires": []
     },
@@ -2126,7 +2178,7 @@
         "targetType": "full",
         "statusVal": "",
         "statusType": "auto",
-        "x": 860,
+        "x": 940,
         "y": 180,
         "wires": []
     },
@@ -2198,7 +2250,7 @@
         "ignore": false,
         "pauseAtStartup": false,
         "topicDependent": false,
-        "x": 515,
+        "x": 635,
         "y": 100,
         "wires": [
             [],
@@ -2207,6 +2259,203 @@
             ]
         ],
         "l": false
+    },
+    {
+        "id": "error-demo-inject",
+        "type": "inject",
+        "z": "32e3cba513b07c09",
+        "g": "error-demo-group",
+        "name": "simulate caught error",
+        "props": [],
+        "repeat": "60",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 1220,
+        "y": 360,
+        "wires": [
+            [
+                "error-demo-build"
+            ]
+        ]
+    },
+    {
+        "id": "error-demo-build",
+        "type": "function",
+        "z": "32e3cba513b07c09",
+        "g": "error-demo-group",
+        "name": "Example Catch message",
+        "func": "msg.timestamp = Date.now();\nmsg.dev_id = \"nosql-sensor-1\";\nmsg.deployment_id = \"demo-deployment\";\nthrow Error(\"Somethings wrong AAAAAAAA\")",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1450,
+        "y": 360,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "fc74553e437bd00d",
+        "type": "subflow:5143175b934accee",
+        "z": "32e3cba513b07c09",
+        "name": "",
+        "env": [
+            {
+                "name": "OUTBOX_SINK",
+                "value": "1ebe9c435c96c58d",
+                "type": "conf-type"
+            },
+            {
+                "name": "POSTGRES_CONFIG",
+                "value": "nosql-postgres-config",
+                "type": "conf-type"
+            }
+        ],
+        "x": 1700,
+        "y": 100,
+        "wires": [
+            [],
+            [],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "e3af0ffe13a943a5",
+        "type": "function",
+        "z": "32e3cba513b07c09",
+        "name": "Build Error WritePlan v1",
+        "func": "let {\n    timestamp,\n    dev_id,\n    deployment_id,\n\n    payload,\n    error,\n} = msg;\n\nlet { message, source, stack } = error || {};\n\nconst time = new Date(timestamp || Date.now()).toISOString();\nconst event_id = `${time}-${dev_id}`\n\nreturn [\n    {\n        payload: {\n            writes: {\n                errors: {\n                    event_id,\n                    time,\n                    dev_id: dev_id || '',\n                    deployment_id: deployment_id || '',\n                    level: 'error',\n                    message,\n                    type: 'error',\n                    source: source?.name ? `${source.type || \"node\"}::${source.name}` : \"nodered\",\n                    data: {\n                        error,\n                        payload,\n                    }\n                }\n            }\n        },\n    }, \n]\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1330,
+        "y": 100,
+        "wires": [
+            [
+                "d77b4459d3b86d02"
+            ]
+        ],
+        "outputLabels": [
+            "write plan"
+        ]
+    },
+    {
+        "id": "20087098d00c8c64",
+        "type": "catch",
+        "z": "32e3cba513b07c09",
+        "name": "Error",
+        "scope": null,
+        "uncaught": true,
+        "x": 1150,
+        "y": 100,
+        "wires": [
+            [
+                "e3af0ffe13a943a5"
+            ]
+        ]
+    },
+    {
+        "id": "e5f973fbacf96089",
+        "type": "inject",
+        "z": "32e3cba513b07c09",
+        "name": "queue status",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 3,
+        "topic": "",
+        "x": 1370,
+        "y": 220,
+        "wires": [
+            [
+                "48bd7cea197d0ffb"
+            ]
+        ]
+    },
+    {
+        "id": "48bd7cea197d0ffb",
+        "type": "outbox-control",
+        "z": "32e3cba513b07c09",
+        "name": "Status",
+        "action": "status",
+        "sink": "1ebe9c435c96c58d",
+        "failureClass": "",
+        "limit": 100,
+        "olderThanMs": 86400000,
+        "x": 1520,
+        "y": 220,
+        "wires": [
+            [
+                "0a6667e91768cdd0"
+            ]
+        ]
+    },
+    {
+        "id": "0a6667e91768cdd0",
+        "type": "debug",
+        "z": "32e3cba513b07c09",
+        "name": "outbox status",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload.health.queued & \" queued\"",
+        "statusType": "jsonata",
+        "x": 1680,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "d77b4459d3b86d02",
+        "type": "function",
+        "z": "32e3cba513b07c09",
+        "name": "REGISTRY",
+        "func": "\nmsg.REGISTRY = {\n    errors: {\n        columns: {\n            event_id: { type: \"text\", required: true },\n            time: { type: \"timestamptz\", required: true },\n            dev_id: { type: \"text\", required: true },\n            deployment_id: { type: \"text\", required: true },\n            level: { type: \"text\", required: true },\n            message: { type: \"text\", required: true },\n            type: { type: \"text\", required: true },\n            source: { type: \"text\", required: true },\n            data: { type: \"jsonb\", required: true }\n        },\n        conflict: [\"event_id\", \"time\"],\n        update: [],\n        order: 100\n    },\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1530,
+        "y": 100,
+        "wires": [
+            [
+                "fc74553e437bd00d"
+            ]
+        ]
+    },
+    {
+        "id": "e1cfb82691344797",
+        "type": "function",
+        "z": "32e3cba513b07c09",
+        "name": "REGISTRY",
+        "func": "\nmsg.REGISTRY = {\n    sensor_readings: {\n        columns: {\n            device_id: { type: \"text\", required: true },\n            observed_at: { type: \"timestamptz\", required: true },\n            value_mm: { type: \"float\", required: true }\n        },\n        conflict: [\"device_id\", \"observed_at\"],\n        update: [\"value_mm\"],\n        order: 10\n    },\n    sensor_health: {\n        columns: {\n            device_id: { type: \"text\", required: true },\n            observed_at: { type: \"timestamptz\", required: true },\n            batt_mv: { type: \"integer\", required: true },\n            rssi_dbm: { type: \"float\", required: true }\n        },\n        conflict: [\"device_id\", \"observed_at\"],\n        update: [\"batt_mv\", \"rssi_dbm\"],\n        order: 20\n    },\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 530,
+        "y": 100,
+        "wires": [
+            [
+                "6f345136206c588b"
+            ]
+        ]
     },
     {
         "id": "generate-reading",

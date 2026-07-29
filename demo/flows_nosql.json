@@ -1,0 +1,741 @@
+[
+    {
+        "id": "32e3cba513b07c09",
+        "type": "tab",
+        "label": "No-SQL Outbox",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "5143175b934accee",
+        "type": "subflow",
+        "name": "No-SQL Outbox",
+        "info": "",
+        "category": "",
+        "in": [
+            {
+                "x": 160,
+                "y": 120,
+                "wires": [
+                    {
+                        "id": "cb45b49ed915bf00"
+                    }
+                ]
+            }
+        ],
+        "out": [
+            {
+                "x": 480,
+                "y": 40,
+                "wires": [
+                    {
+                        "id": "cb45b49ed915bf00",
+                        "port": 0
+                    }
+                ]
+            },
+            {
+                "x": 1020,
+                "y": 100,
+                "wires": [
+                    {
+                        "id": "8ca22616ab49947e",
+                        "port": 0
+                    }
+                ]
+            },
+            {
+                "x": 1020,
+                "y": 160,
+                "wires": [
+                    {
+                        "id": "8ca22616ab49947e",
+                        "port": 1
+                    }
+                ]
+            }
+        ],
+        "env": [
+            {
+                "name": "OUTBOX_SINK",
+                "type": "outbox-sink-config",
+                "value": "",
+                "ui": {
+                    "label": {
+                        "en-US": "Sink"
+                    },
+                    "type": "conf-types"
+                }
+            },
+            {
+                "name": "POSTGRES_CONFIG",
+                "type": "postgreSQLConfig",
+                "value": "",
+                "ui": {
+                    "label": {
+                        "en-US": "PostgreSQL"
+                    },
+                    "type": "conf-types"
+                }
+            }
+        ],
+        "meta": {},
+        "color": "#D8BFD8",
+        "status": {
+            "x": 1000,
+            "y": 260,
+            "wires": [
+                {
+                    "id": "876c3e7f9e70f8f7",
+                    "port": 0
+                }
+            ]
+        }
+    },
+    {
+        "id": "c063d286bb8c24cc",
+        "type": "group",
+        "z": "32e3cba513b07c09",
+        "name": "0. Demo schema",
+        "style": {
+            "label": true
+        },
+        "nodes": [
+            "4bd0cd1432041e0b",
+            "563a066a8c4bbd98",
+            "eee020ae284ef244"
+        ],
+        "x": 34,
+        "y": 39,
+        "w": 762,
+        "h": 82
+    },
+    {
+        "id": "5838c5d2ed571f1b",
+        "type": "group",
+        "z": "5143175b934accee",
+        "name": "2. Claim, validate, collate, execute atomically, and settle",
+        "style": {
+            "label": true
+        },
+        "nodes": [
+            "46d938d31797f85d",
+            "a55d1e6597d1c694",
+            "5613daa644e09feb",
+            "1ded091e45aea5be",
+            "15e6460c20999bf6",
+            "a177cc8ac10c088d",
+            "8ca22616ab49947e",
+            "cb45b49ed915bf00"
+        ],
+        "x": 34,
+        "y": 79,
+        "w": 912,
+        "h": 122
+    },
+    {
+        "id": "5c41c04900ed4f30",
+        "type": "group",
+        "z": "32e3cba513b07c09",
+        "name": "3. Inspect and recover",
+        "style": {
+            "label": true
+        },
+        "nodes": [
+            "c51b72a53544f6bd",
+            "4d0b744d9385faa5",
+            "8e2e720e8fae72ed",
+            "2a5c3a43d33bd119",
+            "3ab28c9394f50ec6",
+            "51c54ea2ba9a334a",
+            "84945b5a7bd053d0",
+            "34d2d539f11870f6"
+        ],
+        "x": 64,
+        "y": 379,
+        "w": 702,
+        "h": 202
+    },
+    {
+        "id": "nosql-outbox-config",
+        "type": "durable-outbox-config",
+        "name": "No-SQL sample outbox",
+        "filename": "/data/outbox/nosql.sqlite",
+        "maxQueuedJobs": 100000,
+        "maxJobMb": 1,
+        "maxEnqueueBatch": 1000,
+        "maxDatabaseMb": 1024,
+        "minFreeDiskMb": 256
+    },
+    {
+        "id": "nosql-sink-config",
+        "type": "outbox-sink-config",
+        "name": "PostgreSQL write plans",
+        "outbox": "nosql-outbox-config",
+        "sinkKey": "postgres-write-plan-v1",
+        "leaseMs": 60000,
+        "maxInFlight": 100,
+        "batchSize": 50,
+        "maxAttempts": 10,
+        "retryUntilExpired": "true",
+        "maxAgeMs": 604800000,
+        "baseDelayMs": 1000,
+        "maxDelayMs": 300000,
+        "circuitBreakerEnabled": true,
+        "circuitBreakerThreshold": 3,
+        "circuitBreakerCooldownMs": 30000
+    },
+    {
+        "id": "nosql-postgres-config",
+        "type": "postgreSQLConfig",
+        "name": "No-SQL sample PostgreSQL",
+        "host": "POSTGRES_HOST",
+        "hostFieldType": "env",
+        "port": "POSTGRES_PORT",
+        "portFieldType": "env",
+        "database": "POSTGRES_DB",
+        "databaseFieldType": "env",
+        "ssl": "false",
+        "sslFieldType": "bool",
+        "applicationName": "durable-outbox-nosql-demo",
+        "applicationNameType": "str",
+        "max": "5",
+        "maxFieldType": "num",
+        "idle": 1000,
+        "idleFieldType": "num",
+        "connectionTimeout": 2000,
+        "connectionTimeoutFieldType": "num",
+        "user": "POSTGRES_USER",
+        "userFieldType": "env",
+        "password": "POSTGRES_PASSWORD",
+        "passwordFieldType": "env"
+    },
+    {
+        "id": "46d938d31797f85d",
+        "type": "inject",
+        "z": "5143175b934accee",
+        "g": "5838c5d2ed571f1b",
+        "name": "poll",
+        "props": [],
+        "repeat": "1",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 2,
+        "topic": "",
+        "x": 130,
+        "y": 160,
+        "wires": [
+            [
+                "a55d1e6597d1c694"
+            ]
+        ]
+    },
+    {
+        "id": "a55d1e6597d1c694",
+        "type": "outbox-claim",
+        "z": "5143175b934accee",
+        "g": "5838c5d2ed571f1b",
+        "name": "Claim plans",
+        "sink": "${OUTBOX_SINK}",
+        "outputMode": "batch",
+        "x": 280,
+        "y": 160,
+        "wires": [
+            [
+                "5613daa644e09feb"
+            ]
+        ]
+    },
+    {
+        "id": "5613daa644e09feb",
+        "type": "function",
+        "z": "5143175b934accee",
+        "g": "5838c5d2ed571f1b",
+        "name": "Validate + compile registry",
+        "func": "const PLAN_VERSION = 1;\n\nconst TYPES = {\n    text: {\n        sql: \"text\",\n        validate: value => typeof value === \"string\" && value.length > 0\n    },\n    integer: {\n        sql: \"integer\",\n        validate: Number.isInteger\n    },\n    float: {\n        sql: \"double precision\",\n        validate: Number.isFinite\n    },\n    timestamptz: {\n        sql: \"timestamptz\",\n        validate: value =>\n            typeof value === \"string\" && Number.isFinite(Date.parse(value))\n    }\n};\n\nconst REGISTRY = {\n    sensor_readings: {\n        columns: {\n            device_id: { type: \"text\", required: true },\n            observed_at: { type: \"timestamptz\", required: true },\n            value_mm: { type: \"float\", required: true }\n        },\n        conflict: [\"device_id\", \"observed_at\"],\n        update: [\"value_mm\"],\n        order: 10\n    },\n    sensor_health: {\n        columns: {\n            device_id: { type: \"text\", required: true },\n            observed_at: { type: \"timestamptz\", required: true },\n            batt_mv: { type: \"integer\", required: true },\n            rssi_dbm: { type: \"float\", required: true }\n        },\n        conflict: [\"device_id\", \"observed_at\"],\n        update: [\"batt_mv\", \"rssi_dbm\"],\n        order: 20\n    }\n};\n\nconst identifierPattern = /^[A-Za-z_][A-Za-z0-9_]*$/;\nconst plainObject = value => {\n    if (value == null || typeof value !== \"object\" || Array.isArray(value)) {\n        return false;\n    }\n    const prototype = Object.getPrototypeOf(value);\n    return prototype === null || Object.getPrototypeOf(prototype) === null;\n};\n\nfunction validateRegistry() {\n    for (const [table, definition] of Object.entries(REGISTRY)) {\n        if (!identifierPattern.test(table)) {\n            return \"invalid table identifier \" + table;\n        }\n        if (!plainObject(definition) || !plainObject(definition.columns)) {\n            return table + \" must define columns\";\n        }\n\n        const columns = Object.keys(definition.columns);\n        if (!columns.length) return table + \" must define at least one column\";\n        for (const [column, specification] of Object.entries(definition.columns)) {\n            if (!identifierPattern.test(column)) {\n                return table + \" has invalid column identifier \" + column;\n            }\n            if (!plainObject(specification) || !TYPES[specification.type]) {\n                return table + \".\" + column + \" has an unknown type\";\n            }\n            if (specification.required !== true) {\n                return table + \".\" + column +\n                    \" must be required; optional-column semantics are not defined\";\n            }\n        }\n\n        if (!Array.isArray(definition.conflict) || !definition.conflict.length) {\n            return table + \" must define a conflict key\";\n        }\n        if (!definition.conflict.every(column => columns.includes(column))) {\n            return table + \" conflict key references an unknown column\";\n        }\n        if (!Array.isArray(definition.update)) {\n            return table + \" must define an explicit update list\";\n        }\n        if (!definition.update.every(column =>\n            columns.includes(column) && !definition.conflict.includes(column)\n        )) {\n            return table + \" update list is unknown or overlaps its conflict key\";\n        }\n        if (!Number.isFinite(definition.order)) {\n            return table + \" must define a finite order\";\n        }\n    }\n    return null;\n}\n\nfunction validatePlan(plan) {\n    if (!plainObject(plan)) return \"plan must be an object\";\n    if (plan.version !== PLAN_VERSION) {\n        return \"unsupported plan version \" + plan.version;\n    }\n    if (typeof plan.eventId !== \"string\" || !plan.eventId) {\n        return \"eventId must be a non-empty string\";\n    }\n    if (!plainObject(plan.writes) || !Object.keys(plan.writes).length) {\n        return \"writes must contain at least one registered table\";\n    }\n\n    for (const [table, rows] of Object.entries(plan.writes)) {\n        const definition = REGISTRY[table];\n        if (!definition) return \"table \" + table + \" is not registered\";\n        if (!Array.isArray(rows) || !rows.length) {\n            return table + \" must contain at least one row\";\n        }\n\n        for (const [index, row] of rows.entries()) {\n            if (!plainObject(row)) {\n                return table + \"[\" + index + \"] must be an object\";\n            }\n            const unknown = Object.keys(row).filter(\n                column => !Object.hasOwn(definition.columns, column)\n            );\n            if (unknown.length) {\n                return table + \"[\" + index + \"] has unknown columns: \" +\n                    unknown.join(\", \");\n            }\n            for (const [column, specification] of Object.entries(definition.columns)) {\n                if (!Object.hasOwn(row, column) || row[column] == null) {\n                    return table + \"[\" + index + \"].\" + column + \" is required\";\n                }\n                if (!TYPES[specification.type].validate(row[column])) {\n                    return table + \"[\" + index + \"].\" + column +\n                        \" must be \" + specification.type;\n                }\n            }\n        }\n    }\n    return null;\n}\n\nconst plans = Array.isArray(msg.payload) ? msg.payload : [];\nconst leases = msg.outbox?.batch;\nconst registryError = validateRegistry();\nif (registryError) {\n    msg.outbox = {\n        ...msg.outbox,\n        retryable: true,\n        circuitFailure: true,\n        failureClass: \"configuration\",\n        error: \"Invalid write-plan registry: \" + registryError\n    };\n    return [null, msg];\n}\nif (!Array.isArray(leases) || plans.length !== leases.length) {\n    msg.outbox = {\n        ...msg.outbox,\n        retryable: true,\n        circuitFailure: true,\n        failureClass: \"configuration\",\n        error: \"Claim payload and lease metadata are not aligned\"\n    };\n    return [null, msg];\n}\n\nconst validPlans = [];\nconst validLeases = [];\nconst invalidPlans = [];\nconst invalidLeases = [];\nconst validationErrors = [];\n\nplans.forEach((plan, index) => {\n    const error = validatePlan(plan);\n    if (error) {\n        invalidPlans.push(plan);\n        invalidLeases.push(leases[index]);\n        validationErrors.push({\n            id: leases[index]?.id,\n            eventId: plan?.eventId,\n            error\n        });\n    } else {\n        validPlans.push(plan);\n        validLeases.push(leases[index]);\n    }\n});\n\nlet invalidMessage = null;\nif (invalidPlans.length) {\n    invalidMessage = {\n        ...msg,\n        payload: invalidPlans,\n        outbox: {\n            ...msg.outbox,\n            batch: invalidLeases,\n            retryable: false,\n            circuitFailure: false,\n            failureClass: \"data\",\n            error: JSON.stringify(validationErrors),\n            validationErrors\n        }\n    };\n}\nif (!validPlans.length) return [null, invalidMessage];\n\nconst rowsByTable = Object.fromEntries(\n    Object.keys(REGISTRY).map(table => [table, []])\n);\nfor (const plan of validPlans) {\n    for (const [table, rows] of Object.entries(plan.writes)) {\n        rowsByTable[table].push(...rows);\n    }\n}\nfor (const [table, definition] of Object.entries(REGISTRY)) {\n    const deduplicated = new Map();\n    for (const row of rowsByTable[table]) {\n        const key = JSON.stringify(\n            definition.conflict.map(column => row[column])\n        );\n        deduplicated.set(key, row);\n    }\n    rowsByTable[table] = [...deduplicated.values()];\n}\n\nconst quoteIdentifier = value => '\"' + value.replaceAll('\"', '\"\"') + '\"';\nconst quoteLiteral = value => \"'\" + value.replaceAll(\"'\", \"''\") + \"'\";\nconst definitions = Object.entries(REGISTRY)\n    .sort(([, left], [, right]) => left.order - right.order);\nconst ctes = [\"input(doc) AS (VALUES ($1::jsonb))\"];\n\nfor (const [index, [table, definition]] of definitions.entries()) {\n    const columns = Object.keys(definition.columns);\n    const recordDefinition = columns\n        .map(column => quoteIdentifier(column) + \" \" +\n            TYPES[definition.columns[column].type].sql)\n        .join(\", \");\n    const selectedColumns = columns\n        .map(column => \"row_data.\" + quoteIdentifier(column))\n        .join(\", \");\n    const conflict = definition.conflict.map(quoteIdentifier).join(\", \");\n    const action = definition.update.length\n        ? \"UPDATE SET \" + definition.update\n            .map(column => {\n                const quoted = quoteIdentifier(column);\n                return quoted + \" = EXCLUDED.\" + quoted;\n            })\n            .join(\", \")\n        : \"NOTHING\";\n\n    ctes.push(\"upsert_\" + index + \" AS (\\n\" +\n        \"        INSERT INTO \" + quoteIdentifier(table) +\n        \" (\" + columns.map(quoteIdentifier).join(\", \") + \")\\n\" +\n        \"        SELECT \" + selectedColumns + \"\\n\" +\n        \"        FROM input\\n\" +\n        \"        CROSS JOIN LATERAL jsonb_to_recordset(\\n\" +\n        \"            COALESCE(input.doc -> \" + quoteLiteral(table) +\n        \", '[]'::jsonb)\\n\" +\n        \"        ) AS row_data(\" + recordDefinition + \")\\n\" +\n        \"        ON CONFLICT (\" + conflict + \") DO \" + action + \"\\n\" +\n        \"        RETURNING 1\\n\" +\n        \"    )\");\n}\n\nconst counts = definitions\n    .map(([table], index) =>\n        quoteLiteral(table) + \", (SELECT COUNT(*) FROM upsert_\" + index + \")\"\n    )\n    .join(\", \");\n\nmsg.query = \"WITH\\n\" + ctes.join(\",\\n\") +\n    \"\\nSELECT jsonb_build_object(\" + counts + \") AS affected;\";\nmsg.params = [JSON.stringify(rowsByTable)];\nmsg.payload = validPlans;\nmsg.outbox = {\n    ...msg.outbox,\n    batch: validLeases,\n    planVersion: PLAN_VERSION,\n    planSummary: {\n        plans: validPlans.length,\n        rows: Object.fromEntries(\n            Object.entries(rowsByTable).map(([table, rows]) => [\n                table,\n                rows.length\n            ])\n        )\n    }\n};\nreturn [msg, invalidMessage];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 490,
+        "y": 160,
+        "wires": [
+            [
+                "1ded091e45aea5be"
+            ],
+            [
+                "8ca22616ab49947e"
+            ]
+        ],
+        "outputLabels": [
+            "valid transaction",
+            "invalid plans"
+        ]
+    },
+    {
+        "id": "1ded091e45aea5be",
+        "type": "postgresql",
+        "z": "5143175b934accee",
+        "g": "5838c5d2ed571f1b",
+        "name": "Atomic JSONB upserts",
+        "query": "",
+        "postgreSQLConfig": "${POSTGRES_CONFIG}",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 740,
+        "y": 160,
+        "wires": [
+            [
+                "8ca22616ab49947e"
+            ]
+        ]
+    },
+    {
+        "id": "15e6460c20999bf6",
+        "type": "catch",
+        "z": "5143175b934accee",
+        "g": "5838c5d2ed571f1b",
+        "name": "Catch PostgreSQL",
+        "scope": [
+            "1ded091e45aea5be"
+        ],
+        "uncaught": false,
+        "x": 510,
+        "y": 120,
+        "wires": [
+            [
+                "a177cc8ac10c088d"
+            ]
+        ]
+    },
+    {
+        "id": "a177cc8ac10c088d",
+        "type": "function",
+        "z": "5143175b934accee",
+        "g": "5838c5d2ed571f1b",
+        "name": "Classify batch failure",
+        "func": "const code = String(msg.error?.code || \"\");\nconst dataFailure = /^(22|23)/.test(code);\nmsg.outbox = {\n    ...msg.outbox,\n    retryable: !dataFailure,\n    circuitFailure: !dataFailure,\n    failureClass: dataFailure ? \"data\" : \"infrastructure\",\n    error: msg.error || \"PostgreSQL batch failed\"\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 740,
+        "y": 120,
+        "wires": [
+            [
+                "8ca22616ab49947e"
+            ]
+        ]
+    },
+    {
+        "id": "8ca22616ab49947e",
+        "type": "outbox-settle",
+        "z": "5143175b934accee",
+        "g": "5838c5d2ed571f1b",
+        "name": "Settle lease subset once",
+        "sink": "${OUTBOX_SINK}",
+        "outcome": "success",
+        "x": 905,
+        "y": 160,
+        "wires": [
+            [],
+            []
+        ],
+        "l": false
+    },
+    {
+        "id": "cb45b49ed915bf00",
+        "type": "outbox-enqueue",
+        "z": "5143175b934accee",
+        "g": "5838c5d2ed571f1b",
+        "name": "Persist write plan",
+        "sink": "${OUTBOX_SINK}",
+        "payloadProperty": "payload",
+        "x": 290,
+        "y": 120,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "876c3e7f9e70f8f7",
+        "type": "status",
+        "z": "5143175b934accee",
+        "name": "",
+        "scope": [
+            "cb45b49ed915bf00"
+        ],
+        "x": 860,
+        "y": 260,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "4bd0cd1432041e0b",
+        "type": "inject",
+        "z": "32e3cba513b07c09",
+        "g": "c063d286bb8c24cc",
+        "name": "create sample tables",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 180,
+        "y": 80,
+        "wires": [
+            [
+                "563a066a8c4bbd98"
+            ]
+        ]
+    },
+    {
+        "id": "563a066a8c4bbd98",
+        "type": "postgresql",
+        "z": "32e3cba513b07c09",
+        "g": "c063d286bb8c24cc",
+        "name": "CREATE TABLE IF NOT EXISTS",
+        "query": "CREATE TABLE IF NOT EXISTS sensor_readings (\n    device_id   TEXT NOT NULL,\n    observed_at TIMESTAMPTZ NOT NULL,\n    value_mm    DOUBLE PRECISION NOT NULL,\n    PRIMARY KEY (device_id, observed_at)\n);\n\nCREATE TABLE IF NOT EXISTS sensor_health (\n    device_id   TEXT NOT NULL,\n    observed_at TIMESTAMPTZ NOT NULL,\n    batt_mv     INTEGER NOT NULL,\n    rssi_dbm    DOUBLE PRECISION NOT NULL,\n    PRIMARY KEY (device_id, observed_at)\n);",
+        "postgreSQLConfig": "nosql-postgres-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 440,
+        "y": 80,
+        "wires": [
+            [
+                "eee020ae284ef244"
+            ]
+        ]
+    },
+    {
+        "id": "eee020ae284ef244",
+        "type": "debug",
+        "z": "32e3cba513b07c09",
+        "g": "c063d286bb8c24cc",
+        "name": "schema ready",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "\"ready\"",
+        "statusType": "jsonata",
+        "x": 670,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "c51b72a53544f6bd",
+        "type": "inject",
+        "z": "32e3cba513b07c09",
+        "g": "5c41c04900ed4f30",
+        "name": "queue status",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 3,
+        "topic": "",
+        "x": 190,
+        "y": 420,
+        "wires": [
+            [
+                "4d0b744d9385faa5"
+            ]
+        ]
+    },
+    {
+        "id": "4d0b744d9385faa5",
+        "type": "outbox-control",
+        "z": "32e3cba513b07c09",
+        "g": "5c41c04900ed4f30",
+        "name": "Status",
+        "action": "status",
+        "sink": "nosql-sink-config",
+        "failureClass": "",
+        "limit": 100,
+        "olderThanMs": 86400000,
+        "x": 380,
+        "y": 420,
+        "wires": [
+            [
+                "8e2e720e8fae72ed"
+            ]
+        ]
+    },
+    {
+        "id": "8e2e720e8fae72ed",
+        "type": "debug",
+        "z": "32e3cba513b07c09",
+        "g": "5c41c04900ed4f30",
+        "name": "outbox status",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload.health.queued & \" queued\"",
+        "statusType": "jsonata",
+        "x": 620,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "2a5c3a43d33bd119",
+        "type": "inject",
+        "z": "32e3cba513b07c09",
+        "g": "5c41c04900ed4f30",
+        "name": "resume PostgreSQL",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 210,
+        "y": 480,
+        "wires": [
+            [
+                "3ab28c9394f50ec6"
+            ]
+        ]
+    },
+    {
+        "id": "3ab28c9394f50ec6",
+        "type": "outbox-control",
+        "z": "32e3cba513b07c09",
+        "g": "5c41c04900ed4f30",
+        "name": "Resume + retry now",
+        "action": "resume",
+        "sink": "nosql-sink-config",
+        "failureClass": "",
+        "limit": 100,
+        "olderThanMs": 86400000,
+        "x": 420,
+        "y": 480,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "51c54ea2ba9a334a",
+        "type": "inject",
+        "z": "32e3cba513b07c09",
+        "g": "5c41c04900ed4f30",
+        "name": "list dead letters",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 190,
+        "y": 540,
+        "wires": [
+            [
+                "84945b5a7bd053d0"
+            ]
+        ]
+    },
+    {
+        "id": "84945b5a7bd053d0",
+        "type": "outbox-control",
+        "z": "32e3cba513b07c09",
+        "g": "5c41c04900ed4f30",
+        "name": "List dead",
+        "action": "list-dead",
+        "sink": "nosql-sink-config",
+        "failureClass": "",
+        "limit": 100,
+        "olderThanMs": 86400000,
+        "x": 370,
+        "y": 540,
+        "wires": [
+            [
+                "34d2d539f11870f6"
+            ]
+        ]
+    },
+    {
+        "id": "34d2d539f11870f6",
+        "type": "debug",
+        "z": "32e3cba513b07c09",
+        "g": "5c41c04900ed4f30",
+        "name": "dead-letter details",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload.count & \" dead\"",
+        "statusType": "jsonata",
+        "x": 630,
+        "y": 540,
+        "wires": []
+    },
+    {
+        "id": "4132e89b866d338b",
+        "type": "inject",
+        "z": "32e3cba513b07c09",
+        "name": "5 readings/sec",
+        "props": [],
+        "repeat": "0.2",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 1,
+        "topic": "",
+        "x": 170,
+        "y": 200,
+        "wires": [
+            [
+                "dd3ba88904182db2"
+            ]
+        ]
+    },
+    {
+        "id": "dd3ba88904182db2",
+        "type": "function",
+        "z": "32e3cba513b07c09",
+        "name": "Build WritePlan v1",
+        "func": "const sequence = context.get(\"sequence\") || 0;\ncontext.set(\"sequence\", sequence + 1);\n\nconst deviceId = \"nosql-sensor-1\";\nconst observedAt = new Date().toISOString();\nconst eventId = \"demo:\" + deviceId + \":\" + observedAt;\n\nmsg.payload = {\n    version: 1,\n    eventId,\n    writes: {\n        sensor_readings: [{\n            device_id: deviceId,\n            observed_at: observedAt,\n            value_mm: 100 + (sequence % 50)\n        }],\n        sensor_health: [{\n            device_id: deviceId,\n            observed_at: observedAt,\n            batt_mv: 4100 - (sequence % 100),\n            rssi_dbm: -70 - (sequence % 20)\n        }]\n    }\n};\nmsg.outbox = {\n    dedupeKey: \"postgres-plan:v1:\" + eventId\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 370,
+        "y": 200,
+        "wires": [
+            [
+                "d43de4ce5526e3ca"
+            ]
+        ]
+    },
+    {
+        "id": "1f0534b70717373a",
+        "type": "inject",
+        "z": "32e3cba513b07c09",
+        "name": "enqueue invalid plan",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 180,
+        "y": 240,
+        "wires": [
+            [
+                "2f31c19e32a6c690"
+            ]
+        ]
+    },
+    {
+        "id": "2f31c19e32a6c690",
+        "type": "function",
+        "z": "32e3cba513b07c09",
+        "name": "Missing value_mm",
+        "func": "const observedAt = new Date().toISOString();\nconst eventId = \"invalid:\" + observedAt;\nmsg.payload = {\n    version: 1,\n    eventId,\n    writes: {\n        sensor_readings: [{\n            device_id: \"nosql-sensor-invalid\",\n            observed_at: observedAt\n        }]\n    }\n};\nmsg.outbox = {\n    dedupeKey: \"postgres-plan:v1:\" + eventId\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 380,
+        "y": 240,
+        "wires": [
+            [
+                "d43de4ce5526e3ca"
+            ]
+        ]
+    },
+    {
+        "id": "d43de4ce5526e3ca",
+        "type": "subflow:5143175b934accee",
+        "z": "32e3cba513b07c09",
+        "name": "",
+        "env": [
+            {
+                "name": "OUTBOX_SINK",
+                "value": "nosql-sink-config",
+                "type": "conf-type"
+            },
+            {
+                "name": "POSTGRES_CONFIG",
+                "value": "nosql-postgres-config",
+                "type": "conf-type"
+            }
+        ],
+        "x": 620,
+        "y": 220,
+        "wires": [
+            [],
+            [],
+            [
+                "8efa66cdd619974a"
+            ]
+        ]
+    },
+    {
+        "id": "11f0c281e75d79de",
+        "type": "debug",
+        "z": "32e3cba513b07c09",
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 800,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "f6b284793d6b092b",
+        "type": "debug",
+        "z": "32e3cba513b07c09",
+        "name": "debug 2",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 800,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "8efa66cdd619974a",
+        "type": "debug",
+        "z": "32e3cba513b07c09",
+        "name": "debug 3",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 800,
+        "y": 280,
+        "wires": []
+    }
+]

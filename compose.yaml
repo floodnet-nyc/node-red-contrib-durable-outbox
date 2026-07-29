@@ -25,6 +25,7 @@ services:
       POSTGRES_DB: floodnet_demo
       POSTGRES_USER: floodnet
       POSTGRES_PASSWORD: floodnet
+      FLOWS: "${FLOWS:-flows.json}"
       NODE_OPTIONS: "--no-warnings"
     depends_on:
       postgres:

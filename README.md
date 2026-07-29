@@ -242,6 +242,8 @@ The tests cover:
 - managed-ID enforcement and distinct storage admission failures;
 - corrupt-payload quarantine and unknown-encoding sink pauses;
 - explicit integrity checks and startup queue-counter reconciliation;
+- the No-SQL write-plan demo's structure, Function syntax, cross-realm object
+  validation, and batch lease partitioning;
 - registration and message behavior of all six Node-RED node types.
 
 ### Stress and outage tests
@@ -321,6 +323,70 @@ restarts. Mounting the containing directory is intentional: Node-RED saves by
 writing a temporary file and atomically renaming it over `flows.json`, which
 cannot work when `flows.json` itself is an individual Docker bind mount. The
 SQLite outbox remains separately persisted in `./data/outbox`.
+
+### No-SQL write-plan and batch demo
+
+[`demo/flows_nosql.json`](demo/flows_nosql.json) is an alternate, editable
+flow showing how a producer can describe writes without owning SQL:
+
+```js
+msg.payload = {
+    version: 1,
+    eventId: "stable-source-event-id",
+    writes: {
+        sensor_readings: [{
+            device_id: "sensor-1",
+            observed_at: "2026-07-28T12:00:00.000Z",
+            value_mm: 12.5
+        }],
+        sensor_health: [{
+            device_id: "sensor-1",
+            observed_at: "2026-07-28T12:00:00.000Z",
+            batt_mv: 3710,
+            rssi_dbm: -67
+        }]
+    }
+};
+```
+
+Start that flow instead of the main demo:
+
+```sh
+FLOWS=flows_nosql.json docker compose up --build -d --wait
+```
+
+The flow durably enqueues each `WritePlan` as one job, then claims jobs in
+batches. A single allowlisted registry validates table names, exact columns,
+types, required values, conflict keys, explicit conflict-update columns, and
+table order. Its closed type catalog maps logical types such as `float` and
+`timestamptz` to both validation rules and trusted PostgreSQL types, so
+producers cannot supply SQL fragments. Optional columns are deliberately
+rejected until their insert-default and conflict-update behavior is explicitly
+defined.
+Invalid plans are split out with their matching leases and dead-lettered as
+`data`; valid plans are collated by table and compiled into one parameterized
+PostgreSQL statement. Data-modifying CTEs and `jsonb_to_recordset` make all
+table upserts one atomic transaction. A PostgreSQL failure therefore retries
+the complete valid lease subset without partially acknowledging it.
+
+The registry and plan version form part of the durable sink protocol. Every
+subflow instance that shares a sink key must use the same registry. Change the
+version suffix in the sink key when making an incompatible plan or registry
+change; otherwise a worker can claim a persisted job it does not understand.
+
+The producer runs at five plans per second while the worker polls once per
+second, so each execution normally demonstrates a five-row batch. Click
+`enqueue invalid plan` to exercise validation and the dead-letter output.
+The operation group includes status, resume, and dead-letter inspection
+controls.
+
+Because `./demo` is mounted as a directory, editor deployments save this
+alternate flow directly to `./demo/flows_nosql.json`. Return to the normal
+demo with:
+
+```sh
+docker compose up -d --wait --force-recreate node-red
+```
 
 Inspect delivered rows:
 

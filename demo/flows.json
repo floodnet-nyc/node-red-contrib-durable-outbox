@@ -75,15 +75,25 @@
                     }
                 ]
             },
-            {
-                "x": 780,
-                "y": 160,
-                "wires": [
-                    {
-                        "id": "e059616926ccd33a",
-                        "port": 1
-                    }
-                ]
+    {
+      "x": 780,
+      "y": 160,
+      "wires": [
+        {
+          "id": "e059616926ccd33a",
+          "port": 1
+        }
+      ]
+    },
+    {
+      "x": 300,
+      "y": 180,
+      "wires": [
+        {
+          "id": "5760120cf3329913",
+          "port": 1
+        }
+      ]
             }
         ],
         "env": [
@@ -100,9 +110,15 @@
                 }
             }
         ],
-        "meta": {},
-        "color": "#D8BFD8",
-        "status": {
+  "meta": {},
+  "color": "#D8BFD8",
+  "outputLabels": [
+    "durably accepted",
+    "delivered or retry scheduled",
+    "dead letter",
+    "not persisted"
+  ],
+  "status": {
             "x": 600,
             "y": 260,
             "wires": [
@@ -151,15 +167,25 @@
                     }
                 ]
             },
-            {
-                "x": 1020,
-                "y": 160,
-                "wires": [
-                    {
-                        "id": "8ca22616ab49947e",
-                        "port": 1
-                    }
-                ]
+    {
+      "x": 1020,
+      "y": 160,
+      "wires": [
+        {
+          "id": "8ca22616ab49947e",
+          "port": 1
+        }
+      ]
+    },
+    {
+      "x": 480,
+      "y": 220,
+      "wires": [
+        {
+          "id": "cb45b49ed915bf00",
+          "port": 1
+        }
+      ]
             }
         ],
         "env": [
@@ -186,9 +212,15 @@
                 }
             }
         ],
-        "meta": {},
-        "color": "#D8BFD8",
-        "status": {
+  "meta": {},
+  "color": "#D8BFD8",
+  "outputLabels": [
+    "durably accepted",
+    "delivered or retry scheduled",
+    "dead letter",
+    "not persisted"
+  ],
+  "status": {
             "x": 1000,
             "y": 260,
             "wires": [
@@ -237,15 +269,25 @@
                     }
                 ]
             },
-            {
-                "x": 840,
-                "y": 160,
-                "wires": [
-                    {
-                        "id": "c2622688969a0bfb",
-                        "port": 1
-                    }
-                ]
+    {
+      "x": 840,
+      "y": 160,
+      "wires": [
+        {
+          "id": "c2622688969a0bfb",
+          "port": 1
+        }
+      ]
+    },
+    {
+      "x": 320,
+      "y": 220,
+      "wires": [
+        {
+          "id": "70d6f74028c9ec23",
+          "port": 1
+        }
+      ]
             }
         ],
         "env": [
@@ -272,9 +314,15 @@
                 }
             }
         ],
-        "meta": {},
-        "color": "#D8BFD8",
-        "status": {
+  "meta": {},
+  "color": "#D8BFD8",
+  "outputLabels": [
+    "durably accepted",
+    "delivered or retry scheduled",
+    "dead letter",
+    "not persisted"
+  ],
+  "status": {
             "x": 760,
             "y": 280,
             "wires": [
@@ -302,9 +350,10 @@
             "delivered-debug",
             "dead-debug",
             "postgres-catch",
-            "classify-postgres",
-            "enqueue-postgres",
-            "queued-debug"
+    "classify-postgres",
+    "enqueue-postgres",
+    "queued-debug",
+    "enqueue-rejected-debug"
         ],
         "x": 294,
         "y": 319,
@@ -357,7 +406,7 @@
         "id": "housekeep-group",
         "type": "group",
         "z": "demo-flow",
-        "name": "6. Housekeeping — periodic cleanup (optional, for production)",
+        "name": "6. Manual delivered-history cleanup (optional)",
         "style": {
             "label": true
         },
@@ -555,7 +604,7 @@
         "id": "15fb5b58e56136d1",
         "type": "group",
         "z": "5143175b934accee",
-        "name": "6. Housekeeping — periodic cleanup (optional, for production)",
+        "name": "6. Manual delivered-history cleanup (optional)",
         "style": {
             "label": true
         },
@@ -572,7 +621,7 @@
         "id": "2fe252a37da60650",
         "type": "group",
         "z": "bd2fa914d5e13474",
-        "name": "6. Housekeeping — periodic cleanup (optional, for production)",
+        "name": "6. Manual delivered-history cleanup (optional)",
         "style": {
             "label": true
         },
@@ -589,7 +638,7 @@
         "id": "8e8b072a0908c492",
         "type": "group",
         "z": "629498338552fa25",
-        "name": "6. Housekeeping — periodic cleanup (optional, for production)",
+        "name": "6. Manual delivered-history cleanup (optional)",
         "style": {
             "label": true
         },
@@ -611,7 +660,13 @@
         "maxJobMb": "16",
         "maxEnqueueBatch": 1000,
         "maxDatabaseMb": 1024,
-        "minFreeDiskMb": "256"
+        "minFreeDiskMb": "256",
+        "deliveredRetentionMs": 86400000,
+        "cleanupIntervalMs": 60000,
+        "cleanupBatchSize": 10000,
+        "cleanupHighWatermarkPercent": 80,
+        "cleanupLowWatermarkPercent": 70,
+        "protectIngestion": true
     },
     {
         "id": "postgres-outbox-sink",
@@ -726,7 +781,13 @@
         "maxJobMb": 1,
         "maxEnqueueBatch": 1000,
         "maxDatabaseMb": 1024,
-        "minFreeDiskMb": 256
+        "minFreeDiskMb": 256,
+        "deliveredRetentionMs": 86400000,
+        "cleanupIntervalMs": 60000,
+        "cleanupBatchSize": 10000,
+        "cleanupHighWatermarkPercent": 80,
+        "cleanupLowWatermarkPercent": 70,
+        "protectIngestion": true
     },
     {
         "id": "nosql-sink-config",
@@ -911,11 +972,11 @@
         "type": "inject",
         "z": "629498338552fa25",
         "g": "8e8b072a0908c492",
-        "name": "Purge older than 1 day",
+        "name": "Manual purge older than 1 day",
         "props": [
             {
                 "p": "outbox.olderThanMs",
-                "v": "3600000",
+                "v": "86400000",
                 "vt": "num"
             },
             {
@@ -924,9 +985,9 @@
                 "vt": "num"
             }
         ],
-        "repeat": "3600",
+        "repeat": "",
         "crontab": "",
-        "once": true,
+        "once": false,
         "onceDelay": "6",
         "topic": "",
         "x": 270,
@@ -1125,11 +1186,11 @@
         "type": "inject",
         "z": "5143175b934accee",
         "g": "15fb5b58e56136d1",
-        "name": "Purge older than 1 day",
+        "name": "Manual purge older than 1 day",
         "props": [
             {
                 "p": "outbox.olderThanMs",
-                "v": "3600000",
+                "v": "86400000",
                 "vt": "num"
             },
             {
@@ -1138,9 +1199,9 @@
                 "vt": "num"
             }
         ],
-        "repeat": "900",
+        "repeat": "",
         "crontab": "",
-        "once": true,
+        "once": false,
         "onceDelay": "60",
         "topic": "",
         "x": 270,
@@ -1330,11 +1391,11 @@
         "type": "inject",
         "z": "bd2fa914d5e13474",
         "g": "2fe252a37da60650",
-        "name": "Purge older than 1 day",
+        "name": "Manual purge older than 1 day",
         "props": [
             {
                 "p": "outbox.olderThanMs",
-                "v": "3600000",
+                "v": "86400000",
                 "vt": "num"
             },
             {
@@ -1343,9 +1404,9 @@
                 "vt": "num"
             }
         ],
-        "repeat": "3600",
+        "repeat": "",
         "crontab": "",
-        "once": true,
+        "once": false,
         "onceDelay": "60",
         "topic": "",
         "x": 370,
@@ -1449,12 +1510,32 @@
         ],
         "x": 540,
         "y": 120,
-        "wires": [
-            [],
-            [],
-            []
-        ]
-    },
+    "wires": [
+      [],
+      [],
+      [],
+      [
+        "durable-rejected-debug"
+      ]
+    ]
+  },
+  {
+    "id": "durable-rejected-debug",
+    "type": "debug",
+    "z": "22a07776c86a0b11",
+    "name": "Not persisted",
+    "active": true,
+    "tosidebar": true,
+    "console": true,
+    "tostatus": true,
+    "complete": "outbox.result",
+    "targetType": "msg",
+    "statusVal": "outbox.result.error.code",
+    "statusType": "msg",
+    "x": 800,
+    "y": 200,
+    "wires": []
+  },
     {
         "id": "80fd8f7de7af3a8e",
         "type": "inject",
@@ -1587,14 +1668,34 @@
         ],
         "x": 540,
         "y": 120,
-        "wires": [
-            [],
-            [],
-            [
-                "4ee2e518bb11dc81"
-            ]
-        ]
-    },
+    "wires": [
+      [],
+      [],
+      [
+        "4ee2e518bb11dc81"
+      ],
+      [
+        "batch-rejected-debug"
+      ]
+    ]
+  },
+  {
+    "id": "batch-rejected-debug",
+    "type": "debug",
+    "z": "f9d60f4c68faa702",
+    "name": "Not persisted",
+    "active": true,
+    "tosidebar": true,
+    "console": true,
+    "tostatus": true,
+    "complete": "outbox.result",
+    "targetType": "msg",
+    "statusVal": "outbox.result.error.code",
+    "statusType": "msg",
+    "x": 800,
+    "y": 200,
+    "wires": []
+  },
     {
         "id": "ee213fa79003e8fc",
         "type": "debug",
@@ -1952,14 +2053,34 @@
         ],
         "x": 680,
         "y": 120,
-        "wires": [
-            [],
-            [],
-            [
-                "8efa66cdd619974a"
-            ]
-        ]
-    },
+    "wires": [
+      [],
+      [],
+      [
+        "8efa66cdd619974a"
+      ],
+      [
+        "nosql-rejected-debug"
+      ]
+    ]
+  },
+  {
+    "id": "nosql-rejected-debug",
+    "type": "debug",
+    "z": "32e3cba513b07c09",
+    "name": "Not persisted",
+    "active": true,
+    "tosidebar": true,
+    "console": true,
+    "tostatus": true,
+    "complete": "outbox.result",
+    "targetType": "msg",
+    "statusVal": "outbox.result.error.code",
+    "statusType": "msg",
+    "x": 940,
+    "y": 200,
+    "wires": []
+  },
     {
         "id": "11f0c281e75d79de",
         "type": "debug",
@@ -2142,6 +2263,9 @@
         "wires": [
             [
                 "queued-debug"
+            ],
+            [
+                "enqueue-rejected-debug"
             ]
         ]
     },
@@ -2178,6 +2302,24 @@
         "statusType": "auto",
         "x": 1160,
         "y": 360,
+        "wires": []
+    },
+    {
+        "id": "enqueue-rejected-debug",
+        "type": "debug",
+        "z": "demo-flow",
+        "g": "84ef9b0fd4902c58",
+        "name": "Not persisted — operator action required",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": true,
+        "complete": "outbox.result",
+        "targetType": "msg",
+        "statusVal": "outbox.result.error.code",
+        "statusType": "msg",
+        "x": 1080,
+        "y": 400,
         "wires": []
     },
     {
@@ -2628,7 +2770,7 @@
         "type": "inject",
         "z": "demo-flow",
         "g": "housekeep-group",
-        "name": "Purge older than 1 day",
+        "name": "Manual purge older than 1 day",
         "props": [
             {
                 "p": "outbox.olderThanMs",
@@ -2641,9 +2783,9 @@
                 "vt": "num"
             }
         ],
-        "repeat": "3600",
+        "repeat": "",
         "crontab": "",
-        "once": true,
+        "once": false,
         "onceDelay": "60",
         "x": 230,
         "y": 1040,

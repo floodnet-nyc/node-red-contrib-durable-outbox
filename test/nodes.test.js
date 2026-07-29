@@ -25,10 +25,22 @@ test("registers and exercises all outbox nodes", async () => {
     maxJobMb: 1.5,
     maxDatabaseMb: 64,
     minFreeDiskMb: 32,
+    deliveredRetentionMs: 3_600_000,
+    cleanupIntervalMs: 5_000,
+    cleanupBatchSize: 500,
+    cleanupHighWatermarkPercent: 85,
+    cleanupLowWatermarkPercent: 65,
+    protectIngestion: true,
   });
   assert.equal(config.store.maxJobBytes, 1.5 * 1_048_576);
   assert.equal(config.store.maxDatabaseBytes, 64 * 1_048_576);
   assert.equal(config.store.minFreeDiskBytes, 32 * 1_048_576);
+  assert.equal(config.store.deliveredRetentionMs, 3_600_000);
+  assert.equal(config.cleanupIntervalMs, 5_000);
+  assert.equal(config.store.cleanupBatchSize, 500);
+  assert.equal(config.store.cleanupHighWatermark, 0.85);
+  assert.equal(config.store.cleanupLowWatermark, 0.65);
+  assert.equal(config.store.protectIngestion, true);
   harness.instantiate("outbox-sink-config", {
     id: "postgres-sink",
     outbox: "outbox",
@@ -88,6 +100,19 @@ test("registers and exercises all outbox nodes", async () => {
   await harness.close(enqueue);
   await harness.close(claim);
   await harness.close(config);
+});
+
+test("durable outbox rejects inverted cleanup watermarks", () => {
+  const harness = createHarness();
+  assert.throws(
+    () =>
+      harness.instantiate("durable-outbox-config", {
+        filename: ":memory:",
+        cleanupHighWatermarkPercent: 70,
+        cleanupLowWatermarkPercent: 80,
+      }),
+    /0 <= target < start < 100/
+  );
 });
 
 test("settle sends non-retryable failures to its dead-letter output", async () => {
@@ -331,6 +356,48 @@ test("fixed-sink enqueue rejects a mismatched durable sink key", async () => {
     (error) => error.code === "OUTBOX_MANAGED_ID"
   );
   assert.equal(config.store.stats().health.queued, 0);
+  await harness.close(config);
+});
+
+test("enqueue routes capacity rejection and rate-limits repeated errors", async () => {
+  const harness = createHarness();
+  const config = harness.instantiate("durable-outbox-config", {
+    id: "outbox",
+    filename: ":memory:",
+    protectIngestion: true,
+  });
+  harness.instantiate("outbox-sink-config", {
+    id: "postgres-sink",
+    outbox: "outbox",
+    sinkKey: "postgres",
+  });
+  const enqueue = harness.instantiate("outbox-enqueue", {
+    sink: "postgres-sink",
+  });
+  const used = config.store.storageHealth().usedDatabaseBytes;
+  config.store.maxDatabaseBytes = used + 512;
+
+  await harness.input(enqueue, {
+    payload: { bytes: "x".repeat(1_024) },
+  });
+  await harness.input(enqueue, {
+    payload: { bytes: "y".repeat(1_024) },
+  });
+
+  assert.equal(enqueue.sent.length, 2);
+  for (const output of enqueue.sent) {
+    assert.equal(output[0], null);
+    assert.equal(
+      output[1].outbox.result.error.code,
+      "OUTBOX_DATABASE_CAPACITY"
+    );
+    assert.equal(output[1].outbox.result.inserted, false);
+  }
+  assert.equal(enqueue.errors.length, 1);
+  assert.match(enqueue.statuses.at(-1).text, /capacity blocked \(2\)/);
+  assert.equal(config.store.countQueued("postgres"), 0);
+
+  await harness.close(enqueue);
   await harness.close(config);
 });
 

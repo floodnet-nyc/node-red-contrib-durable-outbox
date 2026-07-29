@@ -45,15 +45,25 @@
                     }
                 ]
             },
-            {
-                "x": 1020,
-                "y": 160,
-                "wires": [
-                    {
-                        "id": "8ca22616ab49947e",
-                        "port": 1
-                    }
-                ]
+    {
+      "x": 1020,
+      "y": 160,
+      "wires": [
+        {
+          "id": "8ca22616ab49947e",
+          "port": 1
+        }
+      ]
+    },
+    {
+      "x": 480,
+      "y": 220,
+      "wires": [
+        {
+          "id": "cb45b49ed915bf00",
+          "port": 1
+        }
+      ]
             }
         ],
         "env": [
@@ -80,9 +90,15 @@
                 }
             }
         ],
-        "meta": {},
-        "color": "#D8BFD8",
-        "status": {
+  "meta": {},
+  "color": "#D8BFD8",
+  "outputLabels": [
+    "durably accepted",
+    "delivered or retry scheduled",
+    "dead letter",
+    "not persisted"
+  ],
+  "status": {
             "x": 1000,
             "y": 260,
             "wires": [
@@ -166,7 +182,13 @@
         "maxJobMb": 1,
         "maxEnqueueBatch": 1000,
         "maxDatabaseMb": 1024,
-        "minFreeDiskMb": 256
+        "minFreeDiskMb": 256,
+        "deliveredRetentionMs": 86400000,
+        "cleanupIntervalMs": 60000,
+        "cleanupBatchSize": 10000,
+        "cleanupHighWatermarkPercent": 80,
+        "cleanupLowWatermarkPercent": 70,
+        "protectIngestion": true
     },
     {
         "id": "nosql-sink-config",
@@ -687,8 +709,28 @@
             [],
             [
                 "8efa66cdd619974a"
+            ],
+            [
+                "nosql-demo-rejected"
             ]
         ]
+    },
+    {
+        "id": "nosql-demo-rejected",
+        "type": "debug",
+        "z": "32e3cba513b07c09",
+        "name": "No-SQL plan not persisted",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": true,
+        "complete": "outbox.result",
+        "targetType": "msg",
+        "statusVal": "outbox.result.error.code",
+        "statusType": "msg",
+        "x": 920,
+        "y": 280,
+        "wires": []
     },
     {
         "id": "11f0c281e75d79de",
@@ -756,15 +798,25 @@
             }
         ],
         "out": [
-            {
-                "x": 620,
-                "y": 100,
-                "wires": [
-                    {
-                        "id": "error-plan-enqueue",
-                        "port": 0
-                    }
-                ]
+    {
+      "x": 620,
+      "y": 100,
+      "wires": [
+        {
+          "id": "error-plan-enqueue",
+          "port": 0
+        }
+      ]
+    },
+    {
+      "x": 620,
+      "y": 140,
+      "wires": [
+        {
+          "id": "error-plan-enqueue",
+          "port": 1
+        }
+      ]
             }
         ],
         "env": [
@@ -786,9 +838,10 @@
         "inputLabels": [
             "caught error"
         ],
-        "outputLabels": [
-            "durably accepted"
-        ],
+  "outputLabels": [
+    "durably accepted",
+    "not persisted"
+  ],
         "status": {
             "x": 620,
             "y": 180,
@@ -942,15 +995,16 @@
             "label": true
         },
         "nodes": [
-            "error-demo-inject",
-            "error-demo-build",
-            "error-demo-instance",
-            "error-demo-debug"
+        "error-demo-inject",
+        "error-demo-build",
+        "error-demo-instance",
+        "error-demo-debug",
+        "error-demo-rejected"
         ],
-        "x": 934,
-        "y": 39,
-        "w": 672,
-        "h": 122
+  "x": 934,
+  "y": 39,
+  "w": 672,
+  "h": 162
     },
     {
         "id": "error-demo-inject",
@@ -1011,6 +1065,9 @@
         "wires": [
             [
                 "error-demo-debug"
+            ],
+            [
+                "error-demo-rejected"
             ]
         ]
     },
@@ -1030,6 +1087,24 @@
         "statusType": "jsonata",
         "x": 1480,
         "y": 140,
+        "wires": []
+    },
+    {
+        "id": "error-demo-rejected",
+        "type": "debug",
+        "z": "32e3cba513b07c09",
+        "g": "error-demo-group",
+        "name": "error plan not persisted",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": true,
+        "complete": "outbox.result",
+        "targetType": "msg",
+        "statusVal": "outbox.result.error.code",
+        "statusType": "msg",
+        "x": 1480,
+        "y": 180,
         "wires": []
     }
 ]

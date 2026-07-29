@@ -28,6 +28,49 @@
         value: 256,
         required: true,
         validate: RED.validators.number()
+      },
+      deliveredRetentionMs: {
+        value: 86400000,
+        required: true,
+        validate: function (value) {
+          return Number.isFinite(Number(value)) && Number(value) >= 0;
+        }
+      },
+      cleanupIntervalMs: {
+        value: 60000,
+        required: true,
+        validate: function (value) {
+          return Number.isFinite(Number(value)) && Number(value) >= 1000;
+        }
+      },
+      cleanupBatchSize: {
+        value: 10000,
+        required: true,
+        validate: function (value) {
+          const number = Number(value);
+          return Number.isInteger(number) && number >= 1 && number <= 100000;
+        }
+      },
+      cleanupHighWatermarkPercent: {
+        value: 80,
+        required: true,
+        validate: function (value) {
+          const number = Number(value);
+          return Number.isFinite(number) && number > 0 && number < 100 &&
+            number > Number(this.cleanupLowWatermarkPercent);
+        }
+      },
+      cleanupLowWatermarkPercent: {
+        value: 70,
+        required: true,
+        validate: function (value) {
+          const number = Number(value);
+          return Number.isFinite(number) && number >= 0 &&
+            number < Number(this.cleanupHighWatermarkPercent);
+        }
+      },
+      protectIngestion: {
+        value: true
       }
     },
     label: function () {
@@ -107,7 +150,8 @@
       payloadProperty: { value: "payload", required: true }
     },
     inputs: 1,
-    outputs: 1,
+    outputs: 2,
+    outputLabels: ["persisted or duplicate", "not persisted"],
     icon: "font-awesome/fa-save",
     oneditprepare: function () {
       $("#node-input-payloadProperty").typedInput({
@@ -213,6 +257,9 @@
     <input type="text" id="node-config-input-filename">
   </div>
   <div class="form-row">
+    <h4><i class="fa fa-hdd-o"></i> Storage limits</h4>
+  </div>
+  <div class="form-row">
     <label for="node-config-input-maxQueuedJobs">Maximum queued jobs</label>
     <input type="number" id="node-config-input-maxQueuedJobs">
   </div>
@@ -231,6 +278,38 @@
   <div class="form-row">
     <label for="node-config-input-minFreeDiskMb">Minimum free disk (MB)</label>
     <input type="number" id="node-config-input-minFreeDiskMb" min="0" step="any">
+  </div>
+  <div class="form-row">
+    <h4><i class="fa fa-history"></i> Delivered history</h4>
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-deliveredRetentionMs">Retention (ms)</label>
+    <input type="number" id="node-config-input-deliveredRetentionMs" min="0">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-cleanupIntervalMs">Cleanup interval (ms)</label>
+    <input type="number" id="node-config-input-cleanupIntervalMs" min="1000">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-cleanupBatchSize">Cleanup batch size</label>
+    <input type="number" id="node-config-input-cleanupBatchSize" min="1" max="100000">
+  </div>
+  <div class="form-row">
+    <h4><i class="fa fa-shield"></i> Storage pressure</h4>
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-cleanupHighWatermarkPercent">Cleanup start (%)</label>
+    <input type="number" id="node-config-input-cleanupHighWatermarkPercent" min="1" max="99">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-cleanupLowWatermarkPercent">Cleanup target (%)</label>
+    <input type="number" id="node-config-input-cleanupLowWatermarkPercent" min="0" max="98">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-protectIngestion">Protect ingestion</label>
+    <input type="checkbox" id="node-config-input-protectIngestion"
+      style="display:inline-block; width:auto; vertical-align:top;">
+    <span>Evict oldest delivered history under pressure</span>
   </div>
 </script>
 
@@ -416,6 +495,13 @@
     <code>OUTBOX_DATABASE_CAPACITY</code> and <code>OUTBOX_DISK_HEADROOM</code>. Size fields
     use MB, where one MB is 1,048,576 bytes.
   </p>
+  <p>
+    Delivered history is cleaned automatically in bounded batches. Expired records are
+    removed after the configured retention period. When logical database use reaches the
+    cleanup-start watermark, the oldest delivered records may be removed early until use
+    reaches the cleanup target. Pending, leased, and dead-letter jobs are never removed by
+    delivered-history cleanup.
+  </p>
 </script>
 
 <script type="text/html" data-help-name="outbox-sink-config">
@@ -449,6 +535,13 @@
     Plain JSON values, <code>Date</code>, and <code>Buffer</code> values are preserved.
     Undefined object properties are omitted and undefined array entries become null. Circular
     references, functions, streams, and unsupported class instances are rejected atomically.
+  </p>
+  <p>
+    Output 1 contains jobs that were persisted or matched an existing deduplication key.
+    Output 2 contains inputs that were not persisted because a storage or queue capacity
+    boundary remained after automatic cleanup. Capacity details are written to
+    <code>msg.outbox.result</code>. Wire output 2 to an alarm, upstream pause, or another
+    durable source-specific recovery path.
   </p>
 </script>
 

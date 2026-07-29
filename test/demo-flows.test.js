@@ -8,27 +8,34 @@ const vm = require("node:vm");
 
 const flowPath = path.join(__dirname, "..", "demo", "flows_nosql.json");
 const flow = JSON.parse(fs.readFileSync(flowPath, "utf8"));
+const mainFlow = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "..", "demo", "flows.json"), "utf8")
+);
 const byId = new Map(flow.map(node => [node.id, node]));
 const findNode = (type, name) =>
     flow.find(node => node.type === type && node.name === name);
 
-test("No-SQL demo is a self-contained, structurally valid Node-RED flow", () => {
-    assert.equal(byId.size, flow.length, "node ids must be unique");
-
-    for (const node of flow) {
+function assertStructuralReferences(nodes) {
+    const nodesById = new Map(nodes.map(node => [node.id, node]));
+    assert.equal(nodesById.size, nodes.length, "node ids must be unique");
+    for (const node of nodes) {
         if (node.z) {
-            assert.ok(byId.has(node.z), `${node.id} has a missing flow reference`);
+            assert.ok(nodesById.has(node.z), `${node.id} has a missing flow reference`);
         }
         if (node.g) {
-            assert.ok(byId.has(node.g), `${node.id} has a missing group reference`);
+            assert.ok(nodesById.has(node.g), `${node.id} has a missing group reference`);
         }
         for (const target of (node.wires || []).flat()) {
-            assert.ok(byId.has(target), `${node.id} wires to missing node ${target}`);
+            assert.ok(nodesById.has(target), `${node.id} wires to missing node ${target}`);
         }
         for (const target of node.scope || []) {
-            assert.ok(byId.has(target), `${node.id} scopes missing node ${target}`);
+            assert.ok(nodesById.has(target), `${node.id} scopes missing node ${target}`);
         }
     }
+}
+
+test("No-SQL demo is a self-contained, structurally valid Node-RED flow", () => {
+    assertStructuralReferences(flow);
 
     for (const node of flow.filter(candidate => candidate.type === "function")) {
         assert.doesNotThrow(
@@ -36,6 +43,10 @@ test("No-SQL demo is a self-contained, structurally valid Node-RED flow", () => 
             `${node.name} contains invalid JavaScript`
         );
     }
+});
+
+test("main demo remains structurally valid", () => {
+    assertStructuralReferences(mainFlow);
 });
 
 test("No-SQL worker uses batch claims and partitions leases with their plans", () => {
@@ -253,5 +264,35 @@ test("error logger instances enqueue without multiplying No-SQL workers", () => 
     assert.equal(
         loggerChildren.some(node => node.type === "inject" && node.repeat),
         false
+    );
+});
+
+test("demo outboxes own cleanup and expose enqueue rejection paths", () => {
+    const config = findNode("durable-outbox-config", "No-SQL sample outbox");
+    const noSqlSubflow = flow.find(node => node.type === "subflow" &&
+        node.name === "No-SQL Outbox");
+    const loggerSubflow = flow.find(node => node.type === "subflow" &&
+        node.name === "Log Error → Durable WritePlan");
+
+    assert.equal(config.deliveredRetentionMs, 86_400_000);
+    assert.equal(config.cleanupIntervalMs, 60_000);
+    assert.equal(config.cleanupBatchSize, 10_000);
+    assert.equal(config.cleanupHighWatermarkPercent, 80);
+    assert.equal(config.cleanupLowWatermarkPercent, 70);
+    assert.equal(config.protectIngestion, true);
+    assert.equal(noSqlSubflow.out.length, 4);
+    assert.equal(noSqlSubflow.outputLabels.at(-1), "not persisted");
+    assert.equal(loggerSubflow.out.length, 2);
+    assert.equal(loggerSubflow.outputLabels.at(-1), "not persisted");
+
+    const recurringPurges = mainFlow.filter(node =>
+        node.type === "inject" &&
+        /purge/i.test(node.name || "") &&
+        (node.repeat || node.once)
+    );
+    assert.deepEqual(
+        recurringPurges,
+        [],
+        "manual purge controls must not duplicate automatic cleanup"
     );
 });

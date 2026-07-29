@@ -18,9 +18,41 @@ module.exports = function registerOutboxNodes(RED) {
     return Math.max(0, Math.round(normalized * 1_048_576));
   }
 
+  function nonnegativeNumber(value, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) && number >= 0 ? number : fallback;
+  }
+
+  function booleanValue(value, fallback) {
+    if (value == null || value === "") return fallback;
+    return value !== false && value !== "false";
+  }
+
   function DurableOutboxConfigNode(config) {
     RED.nodes.createNode(this, config);
+    const node = this;
     this.filename = config.filename;
+    this.cleanupIntervalMs = Math.max(
+      1_000,
+      nonnegativeNumber(config.cleanupIntervalMs, D.CLEANUP_INTERVAL_MS)
+    );
+    const cleanupHighWatermarkPercent = nonnegativeNumber(
+      config.cleanupHighWatermarkPercent,
+      D.CLEANUP_HIGH_WATERMARK * 100
+    );
+    const cleanupLowWatermarkPercent = nonnegativeNumber(
+      config.cleanupLowWatermarkPercent,
+      D.CLEANUP_LOW_WATERMARK * 100
+    );
+    if (
+      cleanupHighWatermarkPercent <= 0 ||
+      cleanupHighWatermarkPercent >= 100 ||
+      cleanupLowWatermarkPercent >= cleanupHighWatermarkPercent
+    ) {
+      throw new Error(
+        "Cleanup percentages must satisfy 0 <= target < start < 100"
+      );
+    }
     const storeOptions = {
       maxQueuedJobs: config.maxQueuedJobs,
       maxJobBytes: megabytesToBytes(config.maxJobMb, 1),
@@ -30,6 +62,14 @@ module.exports = function registerOutboxNodes(RED) {
         config.minFreeDiskMb,
         256
       ),
+      deliveredRetentionMs: nonnegativeNumber(
+        config.deliveredRetentionMs,
+        D.DELIVERED_RETENTION_MS
+      ),
+      cleanupBatchSize: config.cleanupBatchSize,
+      cleanupHighWatermark: cleanupHighWatermarkPercent / 100,
+      cleanupLowWatermark: cleanupLowWatermarkPercent / 100,
+      protectIngestion: booleanValue(config.protectIngestion, true),
     };
     try {
       this.store = new OutboxStore(this.filename, storeOptions);
@@ -38,8 +78,28 @@ module.exports = function registerOutboxNodes(RED) {
       throw error;
     }
 
+    let closed = false;
+    let cleanupTimer = null;
+    const scheduleCleanup = (delay) => {
+      cleanupTimer = setTimeout(runCleanup, delay);
+      cleanupTimer.unref?.();
+    };
+    const runCleanup = () => {
+      if (closed) return;
+      try {
+        const result = node.store.cleanupDelivered();
+        scheduleCleanup(result.needsMore ? 10 : node.cleanupIntervalMs);
+      } catch (error) {
+        node.error(`Automatic outbox cleanup failed: ${error.message}`);
+        scheduleCleanup(node.cleanupIntervalMs);
+      }
+    };
+    scheduleCleanup(this.cleanupIntervalMs);
+
     this.on("close", (removed, done) => {
       try {
+        closed = true;
+        if (cleanupTimer) clearTimeout(cleanupTimer);
         this.store.close();
         done();
       } catch (error) {
@@ -126,7 +186,13 @@ module.exports = function registerOutboxNodes(RED) {
     const sinkConfig = getSinkConfigNode(node, config.sink);
     const payloadProperty = config.payloadProperty || "payload";
     const STATUS_THROTTLE_MS = 500;
+    const CAPACITY_CODES = new Set([
+      "OUTBOX_DATABASE_CAPACITY",
+      "OUTBOX_DISK_HEADROOM",
+      "OUTBOX_QUEUE_CAPACITY",
+    ]);
     let lastDepthStatus = -STATUS_THROTTLE_MS;
+    let capacityEpisode = null;
     const unsubscribeQueueDepth = sinkConfig.subscribeQueueDepth((count) => {
       const now = Date.now();
       if (count !== 0 && now - lastDepthStatus < STATUS_THROTTLE_MS) return;
@@ -177,10 +243,71 @@ module.exports = function registerOutboxNodes(RED) {
           inserted: results.filter((job) => job.inserted).length,
           duplicates: results.filter((job) => !job.inserted).length,
           queueDepth: sinkConfig.notifyQueueDepth(),
+          cleanup: results.cleanup,
         };
+        capacityEpisode = null;
         send(msg);
         done();
       } catch (error) {
+        if (CAPACITY_CODES.has(error.code)) {
+          const now = Date.now();
+          if (
+            !capacityEpisode ||
+            now - capacityEpisode.lastReportedAt >=
+              D.CAPACITY_LOG_INTERVAL_MS
+          ) {
+            const suppressed = capacityEpisode?.suppressed || 0;
+            node.error(
+              suppressed
+                ? `${error.message} (${suppressed} similar rejections suppressed)`
+                : error
+            );
+            capacityEpisode = {
+              code: error.code,
+              startedAt: capacityEpisode?.startedAt || now,
+              lastReportedAt: now,
+              rejected: (capacityEpisode?.rejected || 0) + 1,
+              suppressed: 0,
+            };
+          } else {
+            capacityEpisode.rejected += 1;
+            capacityEpisode.suppressed += 1;
+          }
+          const storage =
+            error.health || sinkConfig.store.storageHealth({
+              refreshDisk: true,
+            });
+          if (!msg.outbox || typeof msg.outbox !== "object") {
+            msg.outbox = {};
+          }
+          msg.outbox.result = {
+            sink: sinkConfig.sinkKey,
+            inserted: false,
+            error: {
+              code: error.code,
+              message: error.message,
+            },
+            queueDepth: sinkConfig.store.countQueued(sinkConfig.sinkKey),
+            health: {
+              ...storage,
+              databaseUsedPercent:
+                sinkConfig.store.databaseUsedRatio(storage) * 100,
+            },
+            cleanup: {
+              attempted: Boolean(error.cleanupAttempted),
+              batches: Number(error.cleanupBatches) || 0,
+              purged: Number(error.deliveredPurged) || 0,
+            },
+          };
+          node.status({
+            fill: "red",
+            shape: "ring",
+            text: `capacity blocked (${capacityEpisode.rejected})`,
+          });
+          send([null, msg]);
+          done();
+          return;
+        }
         node.status({ fill: "red", shape: "ring", text: "enqueue failed" });
         done(error);
       }

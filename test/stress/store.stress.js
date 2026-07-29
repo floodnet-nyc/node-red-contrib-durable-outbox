@@ -141,6 +141,65 @@ test(
 );
 
 test(
+  "delivered-history turnover cannot stop ingestion at the database limit",
+  { timeout: MAX_TEST_MS },
+  (t) => {
+    const store = temporaryStore(t, "outbox-turnover-stress-", {
+      maxQueuedJobs: JOBS + 1_000,
+      maxDatabaseBytes: 2 * 1_024 * 1_024,
+      deliveredRetentionMs: 86_400_000,
+      cleanupBatchSize: 100,
+      cleanupHighWatermark: 0.8,
+      cleanupLowWatermark: 0.7,
+      protectIngestion: true,
+    });
+    const startedAt = performance.now();
+
+    for (let index = 0; index < JOBS; index += 1) {
+      const [queued] = store.enqueue({
+        sink: "turnover",
+        dedupeKey: `turnover-${index}`,
+        payload: { sequence: index, bytes: "x".repeat(1_024) },
+      });
+      const claimed = store.claim({ sink: "turnover" });
+      assert.equal(claimed.id, queued.id);
+      assert.equal(
+        store.settle(queued.id, {
+          leaseToken: claimed.leaseToken,
+          success: true,
+        }).state,
+        "delivered"
+      );
+    }
+
+    const elapsedMs = performance.now() - startedAt;
+    const stats = store.stats();
+    process.stdout.write(
+      `STRESS_METRICS ${JSON.stringify({
+        scenario: "delivered-history-turnover",
+        jobs: JOBS,
+        elapsedMs: Math.round(elapsedMs),
+        jobsPerSecond: Math.round((JOBS * 1_000) / elapsedMs),
+        deliveredRetained: stats.health.delivered,
+        pressureEvicted: stats.health.cleanup.totalPressureEvicted,
+        usedDatabaseBytes: stats.health.usedDatabaseBytes,
+        maxDatabaseBytes: stats.health.maxDatabaseBytes,
+      })}\n`
+    );
+
+    assert.equal(stats.health.queued, 0);
+    assert.equal(stats.deadLetters, 0);
+    assert.ok(stats.health.delivered < JOBS);
+    assert.ok(stats.health.cleanup.totalPressureEvicted > 0);
+    assert.ok(
+      stats.health.usedDatabaseBytes <=
+        stats.health.maxDatabaseBytes + stats.health.pageSize,
+      "logical usage should remain at the configured boundary"
+    );
+  }
+);
+
+test(
   "an expired-lease storm completes without losing jobs",
   { timeout: MAX_TEST_MS },
   (t) => {

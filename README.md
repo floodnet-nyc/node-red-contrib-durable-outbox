@@ -12,7 +12,8 @@ The module requires Node.js 22 or newer because it uses the built-in
 Install the module and create three configuration nodes, then wire four nodes:
 
 ```
-[Data Source] → [outbox-enqueue] → (original message emitted)
+[Data Source] → [outbox-enqueue] → persisted or duplicate
+                              └─→ not persisted → [Alarm / pause source]
 [Inject 5s]  → [outbox-claim]  → [Your Deliver Node] → [outbox-settle (Success)]
                                └─ [Catch] → [fn: msg.outbox.retryable=true] ─┘
 ```
@@ -34,11 +35,32 @@ Owns one SQLite database and applies its schema and durability settings. Use a
 path on persistent local storage, such as `/data/outbox/outbox.sqlite`.
 
 The config node also bounds queue depth, encoded job size, enqueue batch size,
-logical database use, and minimum filesystem free space. New writes are
-rejected before SQLite grows past either storage boundary; existing work is
-never silently deleted. Reusable SQLite pages do not count as database use.
-Set the free-space reserve to zero only when another system enforces disk
-headroom. Size settings use MB, where one MB is 1,048,576 bytes.
+logical database use, and minimum filesystem free space. Reusable SQLite pages
+do not count as database use. Set the free-space reserve to zero only when
+another system enforces disk headroom. Size settings use MB, where one MB is
+1,048,576 bytes.
+
+Delivered history is retained for 24 hours by default and cleaned automatically
+in bounded batches. Cleanup starts normally with expired records. When logical
+database use reaches the configured high-water mark, the oldest delivered
+records become expendable—even within the normal retention window—until use
+reaches the low-water target. Before rejecting an enqueue at the database
+boundary, the store makes a final bounded attempt to reclaim delivered history.
+Pending, leased, and dead-letter jobs are never removed by this process.
+
+The delivered retention period is therefore a target rather than a guarantee
+under storage pressure. This preserves ingestion and unfinished work at the
+cost of shortening successful-delivery history and its deduplication window.
+
+Automatic cleanup settings are grouped into:
+
+- **Delivered history:** retention period, cleanup interval, and cleanup batch
+  size;
+- **Storage pressure:** cleanup-start percentage, cleanup-target percentage,
+  and whether delivered history may be evicted early to protect ingestion.
+
+The defaults run at most 10,000 deletions per transaction, start pressure
+cleanup at 80%, and continue in yielded batches toward 70%.
 
 ### `outbox-sink-config`
 
@@ -57,6 +79,12 @@ the generated Node-RED config-node ID.
 
 Persists `msg.payload` as one durable job and emits the original message only
 after the commit succeeds. The payload property is configurable.
+
+The first output emits persisted jobs and duplicates. The second output emits
+inputs that were not persisted because a queue, database, or filesystem
+capacity boundary remained after automatic cleanup. Wire the second output to
+an alarm, upstream pause, or source-specific durable recovery path. Repeated
+capacity errors are summarized rather than logged once per input.
 
 ```js
 msg.payload = {
@@ -502,16 +530,21 @@ flow.
   database on NFS.
 - Monitor `status` health fields for queue depth, oldest queued age, expired
   leases, dead-letter count, logical database use, reusable pages, filesystem
-  free space, and startup integrity.
-- Alert on `OUTBOX_DATABASE_CAPACITY` and `OUTBOX_DISK_HEADROOM` enqueue errors;
-  capacity rejection deliberately applies backpressure rather than risking a
-  full disk.
+  free space, capacity state, cleanup totals, pressure evictions, and startup
+  integrity. Pressure eviction indicates that the effective delivered-history
+  and deduplication window was shortened to preserve ingestion.
+- Wire the second `outbox-enqueue` output and alert on
+  `OUTBOX_DATABASE_CAPACITY`, `OUTBOX_QUEUE_CAPACITY`, and
+  `OUTBOX_DISK_HEADROOM`. A database-capacity rejection means no reclaimable
+  delivered history remained; filesystem headroom remains an independent hard
+  boundary.
 - Run `check-integrity` periodically and investigate `ok: false` before
   resuming ingestion. Startup recreates the queue-count triggers and reconciles
   their counters transactionally.
 - A worker lease should exceed the sink's connection and request timeout.
-- Trigger `purge-delivered` periodically in bounded batches. Run an optional
-  maintenance vacuum only during a quiet window.
+- Automatic bounded delivered-history cleanup is owned by the durable outbox;
+  an Inject node is not required. Keep `purge-delivered` for operator-requested
+  cleanup. Run an optional maintenance vacuum only during a quiet window.
 - The outbox gives PostgreSQL effectively-once behavior because the demo uses
   an idempotent upsert. External HTTP sinks still need an idempotency key to
   avoid duplicates after an ambiguous timeout.

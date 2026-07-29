@@ -728,6 +728,149 @@ test("retention, deletion, health, and capacity controls are bounded", (t) => {
   );
 });
 
+test("automatic cleanup bounds retention work and reports progress", (t) => {
+  let now = 100_000;
+  const store = withStore(t, {
+    now: () => now,
+    deliveredRetentionMs: 100,
+    cleanupBatchSize: 2,
+  });
+
+  for (let index = 0; index < 3; index += 1) {
+    const [job] = store.enqueue({
+      sink: "postgres",
+      dedupeKey: `cleanup-${index}`,
+      payload: { index },
+    });
+    store.claim({ sink: "postgres" });
+    settle(store, job.id, { success: true });
+  }
+  now += 101;
+
+  const first = store.cleanupDelivered();
+  assert.equal(first.purged, 2);
+  assert.equal(first.expiredPurged, 2);
+  assert.equal(first.pressureEvicted, 0);
+  assert.equal(first.needsMore, true);
+
+  const second = store.cleanupDelivered();
+  assert.equal(second.purged, 1);
+  assert.equal(second.needsMore, false);
+  const health = store.stats().health;
+  assert.equal(health.delivered, 0);
+  assert.equal(health.cleanup.totalExpiredPurged, 3);
+  assert.equal(health.cleanup.totalPressureEvicted, 0);
+});
+
+test("storage pressure evicts only delivered history toward the low watermark", (t) => {
+  let now = 200_000;
+  const store = withStore(t, {
+    now: () => now,
+    deliveredRetentionMs: 86_400_000,
+    cleanupBatchSize: 2,
+    cleanupHighWatermark: 0.5,
+    cleanupLowWatermark: 0.25,
+  });
+
+  for (let index = 0; index < 3; index += 1) {
+    const [job] = store.enqueue({
+      sink: "postgres",
+      dedupeKey: `pressure-delivered-${index}`,
+      payload: { bytes: "x".repeat(4_096), index },
+    });
+    store.claim({ sink: "postgres" });
+    settle(store, job.id, { success: true });
+    now += 1;
+  }
+  const [failed] = store.enqueue({
+    sink: "postgres",
+    dedupeKey: "pressure-dead-letter",
+    payload: { keep: "dead" },
+  });
+  store.claim({ sink: "postgres", maxInFlight: 2 });
+  settle(store, failed.id, {
+    success: false,
+    retryable: false,
+    failureClass: "data",
+    error: "keep this dead letter",
+  });
+  store.enqueue({
+    sink: "postgres",
+    dedupeKey: "pressure-pending",
+    payload: { keep: true },
+  });
+  const used = store.storageHealth().usedDatabaseBytes;
+  store.maxDatabaseBytes = used;
+
+  const cleanup = store.cleanupDelivered();
+  assert.equal(cleanup.purged, 2);
+  assert.equal(cleanup.expiredPurged, 0);
+  assert.equal(cleanup.pressureEvicted, 2);
+  assert.equal(store.countQueued("postgres"), 1);
+  assert.equal(store.listDeadLetters().length, 1);
+  assert.equal(store.getJob(
+    store.db
+      .prepare("SELECT id FROM outbox_jobs WHERE dedupe_key = ?")
+      .get("pressure-pending").id
+  ).state, "pending");
+});
+
+test("enqueue reclaims delivered history before returning database capacity", (t) => {
+  const store = withStore(t, {
+    cleanupBatchSize: 10,
+    deliveredRetentionMs: 86_400_000,
+  });
+  for (let index = 0; index < 6; index += 1) {
+    const [job] = store.enqueue({
+      sink: "postgres",
+      dedupeKey: `admission-history-${index}`,
+      payload: { bytes: "x".repeat(8_192), index },
+    });
+    store.claim({ sink: "postgres" });
+    settle(store, job.id, { success: true });
+  }
+
+  const used = store.storageHealth().usedDatabaseBytes;
+  store.maxDatabaseBytes = used + 512;
+  const result = store.enqueue({
+    sink: "postgres",
+    dedupeKey: "admitted-after-cleanup",
+    payload: { bytes: "y".repeat(8_192) },
+  });
+
+  assert.equal(result[0].inserted, true);
+  assert.equal(result.cleanup.attempted, true);
+  assert.ok(result.cleanup.purged > 0);
+  assert.equal(store.countQueued("postgres"), 1);
+  assert.ok(
+    store.stats().health.delivered < 6,
+    "admission should sacrifice delivered history, not the new active job"
+  );
+});
+
+test("a duplicate remains admissible without evicting its delivered record", (t) => {
+  const store = withStore(t);
+  const [job] = store.enqueue({
+    sink: "postgres",
+    dedupeKey: "delivered-duplicate-at-capacity",
+    payload: { value: 1 },
+  });
+  store.claim({ sink: "postgres" });
+  settle(store, job.id, { success: true });
+  store.maxDatabaseBytes = 1;
+
+  const duplicate = store.enqueue({
+    sink: "postgres",
+    dedupeKey: "delivered-duplicate-at-capacity",
+    payload: { value: 1 },
+  });
+
+  assert.equal(duplicate[0].inserted, false);
+  assert.equal(duplicate[0].state, "delivered");
+  assert.equal(duplicate.cleanup.attempted, false);
+  assert.equal(store.getJob(job.id).state, "delivered");
+});
+
 test("enqueue manages job ids and reports distinct admission failures", (t) => {
   const store = withStore(t, {
     diskFreeBytes: 1_024,

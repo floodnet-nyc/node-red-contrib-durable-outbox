@@ -780,6 +780,60 @@ test("dead-letter filters are applied before the result limit", (t) => {
   assert.equal(rows[0].sink, "postgres");
 });
 
+test("deletes only exact reviewed dead-letter IDs", (t) => {
+  const store = withStore(t);
+  assert.throws(
+    () => store.deleteDeadLetters([], { sink: "postgres" }),
+    /At least one dead-letter ID/
+  );
+  assert.throws(
+    () => store.deleteDeadLetters([42], { sink: "postgres" }),
+    /non-empty string/
+  );
+  const jobs = store.enqueue([
+    {
+      sink: "postgres",
+      dedupeKey: "archive-postgres",
+      payload: { value: 1 },
+    },
+    {
+      sink: "fieldkit",
+      dedupeKey: "archive-fieldkit",
+      payload: { value: 2 },
+    },
+  ]);
+  for (const job of jobs) {
+    const claimed = store.claim({
+      sink: job.dedupeKey.endsWith("postgres") ? "postgres" : "fieldkit",
+    });
+    settle(store, claimed.id, {
+      success: false,
+      retryable: false,
+      failureClass: "data",
+      error: "invalid",
+    });
+  }
+
+  const result = store.deleteDeadLetters(
+    [jobs[0].id, jobs[1].id, jobs[0].id],
+    { sink: "postgres" }
+  );
+  assert.deepEqual(result.ids, [jobs[0].id]);
+  assert.deepEqual(result.missingIds, [jobs[1].id]);
+  assert.equal(result.deleted, 1);
+  assert.equal(result.missing, 1);
+  assert.deepEqual(
+    store.listDeadLetters().map((job) => job.id),
+    [jobs[1].id]
+  );
+
+  const repeated = store.deleteDeadLetters(jobs[0].id, {
+    sink: "postgres",
+  });
+  assert.equal(repeated.deleted, 0);
+  assert.deepEqual(repeated.missingIds, [jobs[0].id]);
+});
+
 test("retention, deletion, health, and capacity controls are bounded", (t) => {
   let now = 60_000;
   const store = withStore(t, {
@@ -823,11 +877,7 @@ test("retention, deletion, health, and capacity controls are bounded", (t) => {
     1
   );
   assert.equal(
-    store.deleteDeadLetters({
-      sink: "postgres",
-      failureClass: "data",
-      limit: 1,
-    }).deleted,
+    store.deleteDeadLetters(second.id, { sink: "postgres" }).deleted,
     1
   );
   assert.equal(store.getJob(jobs[0].id), null);

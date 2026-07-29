@@ -217,8 +217,7 @@
         const dynamic = action === "msg";
         const deadLetterBulkAction = [
           "list-dead",
-          "requeue-dead",
-          "delete-dead"
+          "requeue-dead"
         ].includes(action);
 
         $(".outbox-control-failure-class-row").toggle(
@@ -464,7 +463,7 @@
       <option value="list-dead">List dead letters</option>
       <option value="requeue-dead">Requeue matching dead letters</option>
       <option value="requeue-one">Requeue one dead letter</option>
-      <option value="delete-dead">Delete matching dead letters</option>
+      <option value="delete-dead">Delete dead letters by ID</option>
       <option value="purge-delivered">Purge delivered jobs</option>
       <option value="maintenance">Database maintenance</option>
       <option value="check-integrity">Check database integrity</option>
@@ -650,7 +649,12 @@
     </dd>
     <dt class="optional">msg.outbox.deadLetterId <span class="property-type">string</span></dt>
     <dd>
-      Identifies the job for <code>requeue-one</code>.
+      Identifies one job for <code>requeue-one</code> or <code>delete-dead</code>.
+    </dd>
+    <dt class="optional">msg.outbox.deadLetterIds <span class="property-type">array</span></dt>
+    <dd>
+      Exact dead-letter IDs to remove with <code>delete-dead</code>. When both ID properties
+      are present, this array takes precedence.
     </dd>
   </dl>
 
@@ -725,9 +729,13 @@
 
     <dt><code>delete-dead</code></dt>
     <dd>
-      Permanently deletes a bounded number of dead letters matching the selected or
-      message-overridden sink and optional failure-class filter. This cannot be undone; review
-      with <code>list-dead</code> first.
+      Permanently deletes exactly the IDs in <code>msg.outbox.deadLetterId</code> or
+      <code>msg.outbox.deadLetterIds</code>, restricted to the selected or message-overridden
+      sink. Obtain and review the records with <code>list-dead</code>, durably handle them, then
+      pass their IDs to this action. Repeating the deletion is safe: IDs already requeued or
+      deleted are returned as <code>missingIds</code>. Use a stable unique archive key derived
+      from each dead-letter ID so a crash after an external archive commit but before deletion
+      can be retried without duplicating the external record.
     </dd>
 
     <dt><code>purge-delivered</code></dt>

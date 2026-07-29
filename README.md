@@ -230,7 +230,7 @@ Supported actions are:
 
 - `status`, `pause`, `resume`, and `retry-now`;
 - `list-dead`, `requeue-dead`, and `requeue-one`;
-- `delete-dead` for reviewed, bounded dead-letter deletion;
+- `delete-dead` for exact, reviewed dead-letter deletion by ID;
 - `purge-delivered` for bounded retention cleanup;
 - `maintenance` for WAL checkpointing and an explicitly requested vacuum;
 - `check-integrity` for schema, trigger, queue-counter, and SQLite checks.
@@ -524,6 +524,18 @@ msg.outbox.action = "requeue-one";
 msg.outbox.deadLetterId = "the-job-id";
 return msg;
 ```
+
+To delete dead letters only after `list-dead` has returned and downstream
+processing has durably handled them:
+
+```js
+msg.outbox.action = "delete-dead";
+msg.outbox.deadLetterIds = archivedJobs.map((job) => job.id);
+return msg;
+```
+
+Deletion is exact and idempotent. Already deleted or requeued IDs are reported
+in `msg.outbox.result.missingIds`; filter-based bulk deletion is not supported.
 
 To purge at most 1,000 delivered records older than one day:
 

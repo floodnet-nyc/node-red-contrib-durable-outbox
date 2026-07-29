@@ -350,8 +350,19 @@ test("control actions report contextual q-first results", async () => {
     failureClass: "data",
     error: "invalid again",
   });
-  outcome = await act("delete-dead");
-  assert.equal(outcome.display.text, "q1 · 1 deleted");
+  outcome = await act("delete-dead", {
+    deadLetterIds: [secondLease.id, "already-acknowledged"],
+  });
+  assert.equal(
+    outcome.display.text,
+    "q1 · 1 deleted · 1 missing"
+  );
+  assert.equal(outcome.display.fill, "yellow");
+
+  await assert.rejects(
+    act("delete-dead"),
+    /At least one dead-letter ID is required/
+  );
 
   outcome = await act("check-integrity");
   assert.equal(outcome.display.text, "q1 · integrity ok ✓");
@@ -462,7 +473,10 @@ test("control status renders compact sink health with q first", async () => {
   assert.match(status.display.text, /^q2 · probe · age 30s/);
 
   store.resumeSink("postgres");
-  store.deleteDeadLetters({ sink: "postgres" });
+  store.deleteDeadLetters(
+    store.listDeadLetters({ sink: "postgres" }).map((job) => job.id),
+    { sink: "postgres" }
+  );
   const activeLeases = store.claimBatch({
     sink: "postgres",
     leaseMs: 1_000,

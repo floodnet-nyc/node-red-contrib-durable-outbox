@@ -143,6 +143,10 @@ module.exports = function registerOutboxNodes(RED) {
         break;
       case "delete-dead":
         tokens.push(`${result.deleted} deleted`);
+        if (result.missing > 0) {
+          fill = "yellow";
+          tokens.push(`${result.missing} missing`);
+        }
         break;
       case "purge-delivered":
         tokens.push(`${result.purged} purged`);
@@ -781,6 +785,7 @@ module.exports = function registerOutboxNodes(RED) {
           ? requestedAge
           : D.MAX_AGE_MS;
         const id = shell.deadLetterId;
+        const ids = shell.deadLetterIds ?? (id ? [id] : undefined);
         let result;
 
         switch (action) {
@@ -824,11 +829,7 @@ module.exports = function registerOutboxNodes(RED) {
             result = store.requeueDeadLetter(id);
             break;
           case "delete-dead":
-            result = store.deleteDeadLetters({
-              sink,
-              failureClass,
-              limit,
-            });
+            result = store.deleteDeadLetters(ids, { sink });
             break;
           case "purge-delivered":
             result = store.purgeDelivered({

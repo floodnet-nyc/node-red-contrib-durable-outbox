@@ -93,7 +93,8 @@ test("registers and exercises all outbox nodes", async () => {
 
   await harness.input(control);
   assert.equal(control.sent[0].outbox.result.action, "status");
-  assert.equal(control.sent[0].payload.jobs[0].state, "delivered");
+  assert.equal(control.sent[0].payload.state, "ready");
+  assert.equal(control.sent[0].payload.display.text, "q0 · ready");
   await harness.input(control, { outbox: { action: "check-integrity" } });
   assert.equal(control.sent[1].payload.ok, true);
 
@@ -242,7 +243,9 @@ test("claim emits a bounded batch and control exposes lifecycle actions", async 
 
   await harness.input(control, { outbox: { action: "status" } });
   assert.equal(control.sent[1].outbox.result.sink, "postgres");
+  assert.equal(control.sent[1].payload.sink, "postgres");
   assert.equal(typeof control.sent[1].payload.health.databaseBytes, "number");
+  assert.match(control.sent[1].payload.display.text, /^q2 · /);
   await harness.input(control, {
     outbox: {
       action: "maintenance",
@@ -252,6 +255,154 @@ test("claim emits a bounded batch and control exposes lifecycle actions", async 
   assert.equal(control.sent[2].payload.checkpoint, null);
 
   await harness.close(claim);
+  await harness.close(config);
+});
+
+test("control status renders compact sink health with q first", async () => {
+  const harness = createHarness();
+  const config = harness.instantiate("durable-outbox-config", {
+    id: "outbox",
+    filename: ":memory:",
+  });
+  harness.instantiate("outbox-sink-config", {
+    id: "postgres-sink",
+    outbox: "outbox",
+    sinkKey: "postgres",
+  });
+  const control = harness.instantiate("outbox-control", {
+    sink: "postgres-sink",
+    action: "status",
+  });
+  const store = config.store;
+  let now = 1_000;
+  store.now = () => now;
+
+  const poll = async () => {
+    await harness.input(control, {});
+    return control.sent.at(-1).payload;
+  };
+
+  let status = await poll();
+  assert.equal(status.state, "ready");
+  assert.deepEqual(status.display, {
+    fill: "green",
+    shape: "dot",
+    text: "q0 · ready",
+  });
+
+  const jobs = store.enqueue(
+    [1, 2, 3].map((value) => ({
+      sink: "postgres",
+      dedupeKey: `compact-status-${value}`,
+      payload: { value },
+    }))
+  );
+  const leases = store.claimBatch({
+    sink: "postgres",
+    leaseMs: 1_000,
+    maxInFlight: 2,
+    batchSize: 2,
+  });
+  store.settle(leases[0].id, {
+    leaseToken: leases[0].leaseToken,
+    success: false,
+    retryable: true,
+    error: "temporary",
+  });
+
+  status = await poll();
+  assert.equal(status.state, "run");
+  assert.equal(status.queued, 3);
+  assert.equal(status.leased, 1);
+  assert.equal(status.retrying, 1);
+  assert.equal(
+    status.display.text,
+    "q3 · age <1s · 1 🪽 · 1 🥀"
+  );
+
+  store.settle(leases[1].id, {
+    leaseToken: leases[1].leaseToken,
+    success: false,
+    retryable: false,
+    failureClass: "data",
+    error: "invalid",
+  });
+  status = await poll();
+  assert.equal(status.state, "dead");
+  assert.equal(status.deadLetters, 1);
+  assert.equal(status.display.fill, "red");
+  assert.equal(status.display.shape, "dot");
+  assert.equal(status.display.text, "q2 · age <1s · 1 🥀 · 1 ☠️");
+
+  store.pauseSink("postgres");
+  status = await poll();
+  assert.equal(status.state, "paused");
+  assert.equal(
+    status.display.text,
+    "q2 · paused ⏸ · age <1s · 1 🥀 · 1 ☠️"
+  );
+
+  store.resumeSink("postgres");
+  store.recordSinkFailure("postgres", {
+    now,
+    errorText: "offline",
+    circuitFailure: true,
+    threshold: 1,
+    cooldownMs: 30_000,
+  });
+  status = await poll();
+  assert.equal(status.state, "open");
+  assert.match(status.display.text, /^q2 · open 30s ⚡ · /);
+
+  now += 30_001;
+  status = await poll();
+  assert.equal(status.state, "probe");
+  assert.match(status.display.text, /^q2 · probe · age 30s/);
+
+  store.resumeSink("postgres");
+  store.deleteDeadLetters({ sink: "postgres" });
+  const activeLeases = store.claimBatch({
+    sink: "postgres",
+    leaseMs: 1_000,
+    maxInFlight: 2,
+    batchSize: 2,
+  });
+  store.settle(activeLeases[0].id, {
+    leaseToken: activeLeases[0].leaseToken,
+    success: true,
+  });
+  const stuckLease = activeLeases[1];
+  now += 1_001;
+  status = await poll();
+  assert.equal(status.state, "stuck");
+  assert.equal(status.expiredLeases, 1);
+  assert.match(
+    status.display.text,
+    /^q1 · stuck · age 31s · 1 🪽 · 1 expired$/
+  );
+
+  const [reclaimed] = store.claimBatch({
+    sink: "postgres",
+    leaseMs: 1_000,
+    maxInFlight: 1,
+    batchSize: 1,
+  });
+  assert.equal(reclaimed.id, stuckLease.id);
+  store.settle(reclaimed.id, {
+    leaseToken: reclaimed.leaseToken,
+    success: true,
+  });
+  store.enqueue({
+    sink: "postgres",
+    dedupeKey: "compact-status-pressure",
+    payload: { value: 4 },
+  });
+  store.cleanupPressureActive = true;
+  status = await poll();
+  assert.equal(status.state, "pressure");
+  assert.match(status.display.text, /^q1 · pressure 💾 · age <1s · disk \d+%$/);
+
+  assert.equal(jobs.length, 3);
   await harness.close(config);
 });
 

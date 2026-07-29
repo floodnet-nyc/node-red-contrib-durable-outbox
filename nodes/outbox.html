@@ -658,10 +658,20 @@
   <dl>
     <dt><code>status</code></dt>
     <dd>
-      Returns counts grouped by sink and state, the total dead-letter count, and circuit-breaker
-      state for each known sink. Health also includes queued count, oldest queued age, expired
-      leases, database/WAL bytes, logical database use, reusable bytes, filesystem free space,
-      configured capacity reserves, and startup integrity results. It does not require a sink.
+      Returns operational status for the selected sink and updates the compact status shown
+      beneath the node. Connect a repeating Inject node to refresh it. The text always starts
+      with queue depth, followed by the oldest active age and non-zero work counts:
+      <code>q263 · age 18m · 10 🪽 · 13 🥀 · 2 ☠️</code>. Wings are leased jobs,
+      the wilted flower is pending work that has previously failed, and the skull is dead
+      letters. Exceptional states such as <code>paused ⏸</code>,
+      <code>open 24s ⚡</code>, expired leases, and storage pressure take precedence while
+      retaining the same queue-first layout.
+    </dd>
+    <dd>
+      The emitted payload remains structured and includes pending, leased, ready, delayed,
+      retrying, expired-lease, and dead-letter counts; oldest and next-available timing;
+      circuit state; storage health; and the exact <code>display</code> object passed to
+      Node-RED's status API.
     </dd>
 
     <dt><code>pause</code></dt>

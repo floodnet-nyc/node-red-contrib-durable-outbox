@@ -239,11 +239,24 @@ Supported actions are:
 eligible. Results are returned in both `msg.payload` and
 `msg.outbox.result`.
 
-`status`, `purge-delivered`, `maintenance`, and `check-integrity` operate on
-the selected sink's entire parent outbox. Dead-letter and retry controls
-default to the selected sink key; `msg.outbox.sink` can override that key
-within the same outbox. Bulk replay skips `outbox-corruption` records and
-reports them as `corruptSkipped`.
+Feed a repeating Inject into a control node configured for `status` to keep a
+compact sink badge current. Its fixed queue-first layout omits zero counts:
+
+```text
+q263 · age 18m · 10 🪽 · 13 🥀 · 2 ☠️
+```
+
+The symbols mean leased, previously failed but still pending, and dead-lettered
+jobs. Pauses, open circuits, expired leases, and storage pressure replace the
+normal state while preserving the `q…` prefix. The emitted payload remains
+structured and includes the exact `display` object passed to Node-RED.
+
+`status` is scoped to the selected sink while including its parent outbox's
+storage health. `purge-delivered`, `maintenance`, and `check-integrity` operate
+on the entire parent outbox. Dead-letter and retry controls default to the
+selected sink key; `msg.outbox.sink` can override that key within the same
+outbox. Bulk replay skips `outbox-corruption` records and reports them as
+`corruptSkipped`.
 
 ## Tests
 

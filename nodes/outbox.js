@@ -28,6 +28,86 @@ module.exports = function registerOutboxNodes(RED) {
     return value !== false && value !== "false";
   }
 
+  function compactDuration(value, { roundUp = false } = {}) {
+    const milliseconds = Math.max(0, Number(value) || 0);
+    const select = roundUp ? Math.ceil : Math.floor;
+    if (milliseconds < 1_000) return "<1s";
+    if (milliseconds < 60_000) {
+      return `${Math.max(1, select(milliseconds / 1_000))}s`;
+    }
+    if (milliseconds < 3_600_000) {
+      return `${Math.max(1, select(milliseconds / 60_000))}m`;
+    }
+    if (milliseconds < 86_400_000) {
+      return `${Math.max(1, select(milliseconds / 3_600_000))}h`;
+    }
+    return `${Math.max(1, select(milliseconds / 86_400_000))}d`;
+  }
+
+  function compactSinkDisplay(status) {
+    const tokens = [`q${status.queued}`];
+    const appearances = {
+      ready: { fill: "green", shape: "dot" },
+      run: { fill: "blue", shape: "dot" },
+      wait: { fill: "yellow", shape: "ring" },
+      paused: { fill: "blue", shape: "ring" },
+      open: { fill: "red", shape: "ring" },
+      probe: { fill: "yellow", shape: "dot" },
+      stuck: { fill: "red", shape: "ring" },
+      dead: { fill: "red", shape: "dot" },
+      pressure: { fill: "yellow", shape: "ring" },
+      capacity: { fill: "red", shape: "ring" },
+    };
+    const appearance = appearances[status.state] || {
+      fill: "grey",
+      shape: "ring",
+    };
+
+    if (status.state === "ready") {
+      tokens.push("ready");
+    } else if (status.state === "wait") {
+      tokens.push(
+        status.nextAvailableInMs == null
+          ? "wait"
+          : `wait ${compactDuration(status.nextAvailableInMs, {
+              roundUp: true,
+            })}`
+      );
+    } else if (status.state === "paused") {
+      tokens.push("paused ⏸");
+    } else if (status.state === "open") {
+      tokens.push(
+        `open ${compactDuration(status.retryInMs, { roundUp: true })} ⚡`
+      );
+    } else if (status.state === "probe") {
+      tokens.push("probe");
+    } else if (status.state === "stuck") {
+      tokens.push("stuck");
+    } else if (status.state === "pressure") {
+      tokens.push("pressure 💾");
+    } else if (status.state === "capacity") {
+      tokens.push("capacity 💾");
+    }
+
+    if (status.oldestQueuedAgeMs != null) {
+      tokens.push(`age ${compactDuration(status.oldestQueuedAgeMs)}`);
+    }
+    if (status.leased > 0) tokens.push(`${status.leased} 🪽`);
+    if (status.retrying > 0) tokens.push(`${status.retrying} 🥀`);
+    if (status.expiredLeases > 0) {
+      tokens.push(`${status.expiredLeases} expired`);
+    }
+    if (status.deadLetters > 0) tokens.push(`${status.deadLetters} ☠️`);
+    if (status.state === "pressure" || status.state === "capacity") {
+      tokens.push(`disk ${Math.round(status.health.databaseUsedPercent)}%`);
+    }
+
+    return {
+      ...appearance,
+      text: tokens.join(" · "),
+    };
+  }
+
   function DurableOutboxConfigNode(config) {
     RED.nodes.createNode(this, config);
     const node = this;
@@ -643,9 +723,11 @@ module.exports = function registerOutboxNodes(RED) {
         let result;
 
         switch (action) {
-          case "status":
-            result = store.stats();
+          case "status": {
+            result = store.sinkStatus(sink);
+            result.display = compactSinkDisplay(result);
             break;
+          }
           case "pause":
             if (!sink) throw new Error("A sink is required to pause");
             result = store.pauseSink(sink);
@@ -714,15 +796,23 @@ module.exports = function registerOutboxNodes(RED) {
         msg.outbox = shell;
         msg.outbox.result = { action, sink: sink || null, result };
         msg.payload = result;
-        node.status({
-          fill: result?.ok === false ? "red" : "green",
-          shape: "dot",
-          text: sink ? `${action} ${sink}` : action,
-        });
+        node.status(
+          action === "status"
+            ? result.display
+            : {
+                fill: result?.ok === false ? "red" : "green",
+                shape: "dot",
+                text: sink ? `${action} ${sink}` : action,
+              }
+        );
         send(msg);
         done();
       } catch (error) {
-        node.status({ fill: "red", shape: "ring", text: "control failed" });
+        node.status({
+          fill: "red",
+          shape: "ring",
+          text: "q? · control failed",
+        });
         done(error);
       }
     });

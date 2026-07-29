@@ -430,9 +430,9 @@ test("control status renders compact sink health with q first", async () => {
     error: "invalid",
   });
   status = await poll();
-  assert.equal(status.state, "dead");
+  assert.equal(status.state, "run");
   assert.equal(status.deadLetters, 1);
-  assert.equal(status.display.fill, "red");
+  assert.equal(status.display.fill, "blue");
   assert.equal(status.display.shape, "dot");
   assert.equal(status.display.text, "q2 · age <1s · 1 🥀 · 1 ☠️");
 

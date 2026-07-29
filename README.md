@@ -248,7 +248,9 @@ q263 · age 18m · 10 🪽 · 13 🥀 · 2 ☠️
 
 The symbols mean leased, previously failed but still pending, and dead-lettered
 jobs. Pauses, open circuits, expired leases, and storage pressure replace the
-normal state while preserving the `q…` prefix. The emitted payload remains
+normal state while preserving the `q…` prefix. Dead letters remain visible but
+do not make an otherwise healthy or actively processing sink red; badge color
+and shape primarily describe current throughput. The emitted payload remains
 structured and includes the exact `display` object passed to Node-RED.
 Other control actions use their existing return values for queue-first
 acknowledgements such as `q263 · paused ⏸`, `q276 · 13 requeued ♻️`, and

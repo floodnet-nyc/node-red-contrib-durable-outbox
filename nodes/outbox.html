@@ -663,7 +663,9 @@
       with queue depth, followed by the oldest active age and non-zero work counts:
       <code>q263 · age 18m · 10 🪽 · 13 🥀 · 2 ☠️</code>. Wings are leased jobs,
       the wilted flower is pending work that has previously failed, and the skull is dead
-      letters. Exceptional states such as <code>paused ⏸</code>,
+      letters. Dead letters remain visible but do not make a healthy or actively processing
+      sink red; fill and shape primarily reflect current throughput. Exceptional states such
+      as <code>paused ⏸</code>,
       <code>open 24s ⚡</code>, expired leases, and storage pressure take precedence while
       retaining the same queue-first layout.
     </dd>

@@ -54,7 +54,6 @@ module.exports = function registerOutboxNodes(RED) {
       open: { fill: "red", shape: "ring" },
       probe: { fill: "yellow", shape: "dot" },
       stuck: { fill: "red", shape: "ring" },
-      dead: { fill: "red", shape: "dot" },
       pressure: { fill: "yellow", shape: "ring" },
       capacity: { fill: "red", shape: "ring" },
     };

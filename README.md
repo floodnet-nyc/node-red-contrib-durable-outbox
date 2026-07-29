@@ -380,6 +380,35 @@ second, so each execution normally demonstrates a five-row batch. Click
 The operation group includes status, resume, and dead-letter inspection
 controls.
 
+#### Durable error logging
+
+The same demo includes `Log Error → Durable WritePlan`. Logger instances
+sanitize caught Node-RED errors and enqueue an `errors` WritePlan directly to
+the selected sink. They do not contain claim pollers; one shared No-SQL Outbox
+instance owns PostgreSQL delivery for the sink. This avoids creating one worker
+for every Catch/Log Error instance.
+
+The plan stores a stable `event_id` derived from the source node, Node-RED
+message ID, and error occurrence. Both the outbox dedupe key and PostgreSQL
+conflict key use that identity. Nested `Error` objects, circular causes, dates,
+buffers, and oversized diagnostic structures are converted to bounded JSON
+before enqueue.
+
+For an existing `errors` table, apply this once before using the new logger:
+
+```sql
+ALTER TABLE errors
+    ADD COLUMN IF NOT EXISTS event_id TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS errors_event_id_time_uidx
+    ON errors (event_id, time);
+```
+
+Including `time` makes the unique index compatible with a TimescaleDB
+hypertable partitioned on that column. Existing rows may leave `event_id`
+null; every new error plan supplies it. The demo's fresh-table bootstrap
+already creates the equivalent constraint.
+
 Because `./demo` is mounted as a directory, editor deployments save this
 alternate flow directly to `./demo/flows_nosql.json`. Return to the normal
 demo with:

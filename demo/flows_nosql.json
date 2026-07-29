@@ -253,7 +253,7 @@
         "z": "5143175b934accee",
         "g": "5838c5d2ed571f1b",
         "name": "Validate + compile registry",
-        "func": "const PLAN_VERSION = 1;\n\nconst TYPES = {\n    text: {\n        sql: \"text\",\n        validate: value => typeof value === \"string\" && value.length > 0\n    },\n    integer: {\n        sql: \"integer\",\n        validate: Number.isInteger\n    },\n    float: {\n        sql: \"double precision\",\n        validate: Number.isFinite\n    },\n    timestamptz: {\n        sql: \"timestamptz\",\n        validate: value =>\n            typeof value === \"string\" && Number.isFinite(Date.parse(value))\n    }\n};\n\nconst REGISTRY = {\n    sensor_readings: {\n        columns: {\n            device_id: { type: \"text\", required: true },\n            observed_at: { type: \"timestamptz\", required: true },\n            value_mm: { type: \"float\", required: true }\n        },\n        conflict: [\"device_id\", \"observed_at\"],\n        update: [\"value_mm\"],\n        order: 10\n    },\n    sensor_health: {\n        columns: {\n            device_id: { type: \"text\", required: true },\n            observed_at: { type: \"timestamptz\", required: true },\n            batt_mv: { type: \"integer\", required: true },\n            rssi_dbm: { type: \"float\", required: true }\n        },\n        conflict: [\"device_id\", \"observed_at\"],\n        update: [\"batt_mv\", \"rssi_dbm\"],\n        order: 20\n    }\n};\n\nconst identifierPattern = /^[A-Za-z_][A-Za-z0-9_]*$/;\nconst plainObject = value => {\n    if (value == null || typeof value !== \"object\" || Array.isArray(value)) {\n        return false;\n    }\n    const prototype = Object.getPrototypeOf(value);\n    return prototype === null || Object.getPrototypeOf(prototype) === null;\n};\n\nfunction validateRegistry() {\n    for (const [table, definition] of Object.entries(REGISTRY)) {\n        if (!identifierPattern.test(table)) {\n            return \"invalid table identifier \" + table;\n        }\n        if (!plainObject(definition) || !plainObject(definition.columns)) {\n            return table + \" must define columns\";\n        }\n\n        const columns = Object.keys(definition.columns);\n        if (!columns.length) return table + \" must define at least one column\";\n        for (const [column, specification] of Object.entries(definition.columns)) {\n            if (!identifierPattern.test(column)) {\n                return table + \" has invalid column identifier \" + column;\n            }\n            if (!plainObject(specification) || !TYPES[specification.type]) {\n                return table + \".\" + column + \" has an unknown type\";\n            }\n            if (specification.required !== true) {\n                return table + \".\" + column +\n                    \" must be required; optional-column semantics are not defined\";\n            }\n        }\n\n        if (!Array.isArray(definition.conflict) || !definition.conflict.length) {\n            return table + \" must define a conflict key\";\n        }\n        if (!definition.conflict.every(column => columns.includes(column))) {\n            return table + \" conflict key references an unknown column\";\n        }\n        if (!Array.isArray(definition.update)) {\n            return table + \" must define an explicit update list\";\n        }\n        if (!definition.update.every(column =>\n            columns.includes(column) && !definition.conflict.includes(column)\n        )) {\n            return table + \" update list is unknown or overlaps its conflict key\";\n        }\n        if (!Number.isFinite(definition.order)) {\n            return table + \" must define a finite order\";\n        }\n    }\n    return null;\n}\n\nfunction validatePlan(plan) {\n    if (!plainObject(plan)) return \"plan must be an object\";\n    if (plan.version !== PLAN_VERSION) {\n        return \"unsupported plan version \" + plan.version;\n    }\n    if (typeof plan.eventId !== \"string\" || !plan.eventId) {\n        return \"eventId must be a non-empty string\";\n    }\n    if (!plainObject(plan.writes) || !Object.keys(plan.writes).length) {\n        return \"writes must contain at least one registered table\";\n    }\n\n    for (const [table, rows] of Object.entries(plan.writes)) {\n        const definition = REGISTRY[table];\n        if (!definition) return \"table \" + table + \" is not registered\";\n        if (!Array.isArray(rows) || !rows.length) {\n            return table + \" must contain at least one row\";\n        }\n\n        for (const [index, row] of rows.entries()) {\n            if (!plainObject(row)) {\n                return table + \"[\" + index + \"] must be an object\";\n            }\n            const unknown = Object.keys(row).filter(\n                column => !Object.hasOwn(definition.columns, column)\n            );\n            if (unknown.length) {\n                return table + \"[\" + index + \"] has unknown columns: \" +\n                    unknown.join(\", \");\n            }\n            for (const [column, specification] of Object.entries(definition.columns)) {\n                if (!Object.hasOwn(row, column) || row[column] == null) {\n                    return table + \"[\" + index + \"].\" + column + \" is required\";\n                }\n                if (!TYPES[specification.type].validate(row[column])) {\n                    return table + \"[\" + index + \"].\" + column +\n                        \" must be \" + specification.type;\n                }\n            }\n        }\n    }\n    return null;\n}\n\nconst plans = Array.isArray(msg.payload) ? msg.payload : [];\nconst leases = msg.outbox?.batch;\nconst registryError = validateRegistry();\nif (registryError) {\n    msg.outbox = {\n        ...msg.outbox,\n        retryable: true,\n        circuitFailure: true,\n        failureClass: \"configuration\",\n        error: \"Invalid write-plan registry: \" + registryError\n    };\n    return [null, msg];\n}\nif (!Array.isArray(leases) || plans.length !== leases.length) {\n    msg.outbox = {\n        ...msg.outbox,\n        retryable: true,\n        circuitFailure: true,\n        failureClass: \"configuration\",\n        error: \"Claim payload and lease metadata are not aligned\"\n    };\n    return [null, msg];\n}\n\nconst validPlans = [];\nconst validLeases = [];\nconst invalidPlans = [];\nconst invalidLeases = [];\nconst validationErrors = [];\n\nplans.forEach((plan, index) => {\n    const error = validatePlan(plan);\n    if (error) {\n        invalidPlans.push(plan);\n        invalidLeases.push(leases[index]);\n        validationErrors.push({\n            id: leases[index]?.id,\n            eventId: plan?.eventId,\n            error\n        });\n    } else {\n        validPlans.push(plan);\n        validLeases.push(leases[index]);\n    }\n});\n\nlet invalidMessage = null;\nif (invalidPlans.length) {\n    invalidMessage = {\n        ...msg,\n        payload: invalidPlans,\n        outbox: {\n            ...msg.outbox,\n            batch: invalidLeases,\n            retryable: false,\n            circuitFailure: false,\n            failureClass: \"data\",\n            error: JSON.stringify(validationErrors),\n            validationErrors\n        }\n    };\n}\nif (!validPlans.length) return [null, invalidMessage];\n\nconst rowsByTable = Object.fromEntries(\n    Object.keys(REGISTRY).map(table => [table, []])\n);\nfor (const plan of validPlans) {\n    for (const [table, rows] of Object.entries(plan.writes)) {\n        rowsByTable[table].push(...rows);\n    }\n}\nfor (const [table, definition] of Object.entries(REGISTRY)) {\n    const deduplicated = new Map();\n    for (const row of rowsByTable[table]) {\n        const key = JSON.stringify(\n            definition.conflict.map(column => row[column])\n        );\n        deduplicated.set(key, row);\n    }\n    rowsByTable[table] = [...deduplicated.values()];\n}\n\nconst quoteIdentifier = value => '\"' + value.replaceAll('\"', '\"\"') + '\"';\nconst quoteLiteral = value => \"'\" + value.replaceAll(\"'\", \"''\") + \"'\";\nconst definitions = Object.entries(REGISTRY)\n    .sort(([, left], [, right]) => left.order - right.order);\nconst ctes = [\"input(doc) AS (VALUES ($1::jsonb))\"];\n\nfor (const [index, [table, definition]] of definitions.entries()) {\n    const columns = Object.keys(definition.columns);\n    const recordDefinition = columns\n        .map(column => quoteIdentifier(column) + \" \" +\n            TYPES[definition.columns[column].type].sql)\n        .join(\", \");\n    const selectedColumns = columns\n        .map(column => \"row_data.\" + quoteIdentifier(column))\n        .join(\", \");\n    const conflict = definition.conflict.map(quoteIdentifier).join(\", \");\n    const action = definition.update.length\n        ? \"UPDATE SET \" + definition.update\n            .map(column => {\n                const quoted = quoteIdentifier(column);\n                return quoted + \" = EXCLUDED.\" + quoted;\n            })\n            .join(\", \")\n        : \"NOTHING\";\n\n    ctes.push(\"upsert_\" + index + \" AS (\\n\" +\n        \"        INSERT INTO \" + quoteIdentifier(table) +\n        \" (\" + columns.map(quoteIdentifier).join(\", \") + \")\\n\" +\n        \"        SELECT \" + selectedColumns + \"\\n\" +\n        \"        FROM input\\n\" +\n        \"        CROSS JOIN LATERAL jsonb_to_recordset(\\n\" +\n        \"            COALESCE(input.doc -> \" + quoteLiteral(table) +\n        \", '[]'::jsonb)\\n\" +\n        \"        ) AS row_data(\" + recordDefinition + \")\\n\" +\n        \"        ON CONFLICT (\" + conflict + \") DO \" + action + \"\\n\" +\n        \"        RETURNING 1\\n\" +\n        \"    )\");\n}\n\nconst counts = definitions\n    .map(([table], index) =>\n        quoteLiteral(table) + \", (SELECT COUNT(*) FROM upsert_\" + index + \")\"\n    )\n    .join(\", \");\n\nmsg.query = \"WITH\\n\" + ctes.join(\",\\n\") +\n    \"\\nSELECT jsonb_build_object(\" + counts + \") AS affected;\";\nmsg.params = [JSON.stringify(rowsByTable)];\nmsg.payload = validPlans;\nmsg.outbox = {\n    ...msg.outbox,\n    batch: validLeases,\n    planVersion: PLAN_VERSION,\n    planSummary: {\n        plans: validPlans.length,\n        rows: Object.fromEntries(\n            Object.entries(rowsByTable).map(([table, rows]) => [\n                table,\n                rows.length\n            ])\n        )\n    }\n};\nreturn [msg, invalidMessage];",
+        "func": "const PLAN_VERSION = 1;\n\nconst TYPES = {\n    text: {\n        sql: \"text\",\n        validate: value => typeof value === \"string\" && value.length > 0\n    },\n    integer: {\n        sql: \"integer\",\n        validate: Number.isInteger\n    },\n    float: {\n        sql: \"double precision\",\n        validate: Number.isFinite\n    },\n    timestamptz: {\n        sql: \"timestamptz\",\n        validate: value =>\n            typeof value === \"string\" && Number.isFinite(Date.parse(value))\n    },\n    jsonb: {\n        sql: \"jsonb\",\n        validate: value => {\n            if (value === undefined) return false;\n            try {\n                JSON.stringify(value);\n                return true;\n            } catch {\n                return false;\n            }\n        }\n    }\n};\n\nconst REGISTRY = {\n    sensor_readings: {\n        columns: {\n            device_id: { type: \"text\", required: true },\n            observed_at: { type: \"timestamptz\", required: true },\n            value_mm: { type: \"float\", required: true }\n        },\n        conflict: [\"device_id\", \"observed_at\"],\n        update: [\"value_mm\"],\n        order: 10\n    },\n    sensor_health: {\n        columns: {\n            device_id: { type: \"text\", required: true },\n            observed_at: { type: \"timestamptz\", required: true },\n            batt_mv: { type: \"integer\", required: true },\n            rssi_dbm: { type: \"float\", required: true }\n        },\n        conflict: [\"device_id\", \"observed_at\"],\n        update: [\"batt_mv\", \"rssi_dbm\"],\n        order: 20\n    },\n    errors: {\n        columns: {\n            event_id: { type: \"text\", required: true },\n            time: { type: \"timestamptz\", required: true },\n            dev_id: { type: \"text\", required: true },\n            deployment_id: { type: \"text\", required: true },\n            level: { type: \"text\", required: true },\n            message: { type: \"text\", required: true },\n            type: { type: \"text\", required: true },\n            source: { type: \"text\", required: true },\n            data: { type: \"jsonb\", required: true }\n        },\n        conflict: [\"event_id\", \"time\"],\n        update: [],\n        order: 100\n    }\n};\n\nconst identifierPattern = /^[A-Za-z_][A-Za-z0-9_]*$/;\nconst plainObject = value => {\n    if (value == null || typeof value !== \"object\" || Array.isArray(value)) {\n        return false;\n    }\n    const prototype = Object.getPrototypeOf(value);\n    return prototype === null || Object.getPrototypeOf(prototype) === null;\n};\n\nfunction validateRegistry() {\n    for (const [table, definition] of Object.entries(REGISTRY)) {\n        if (!identifierPattern.test(table)) {\n            return \"invalid table identifier \" + table;\n        }\n        if (!plainObject(definition) || !plainObject(definition.columns)) {\n            return table + \" must define columns\";\n        }\n\n        const columns = Object.keys(definition.columns);\n        if (!columns.length) return table + \" must define at least one column\";\n        for (const [column, specification] of Object.entries(definition.columns)) {\n            if (!identifierPattern.test(column)) {\n                return table + \" has invalid column identifier \" + column;\n            }\n            if (!plainObject(specification) || !TYPES[specification.type]) {\n                return table + \".\" + column + \" has an unknown type\";\n            }\n            if (specification.required !== true) {\n                return table + \".\" + column +\n                    \" must be required; optional-column semantics are not defined\";\n            }\n        }\n\n        if (!Array.isArray(definition.conflict) || !definition.conflict.length) {\n            return table + \" must define a conflict key\";\n        }\n        if (!definition.conflict.every(column => columns.includes(column))) {\n            return table + \" conflict key references an unknown column\";\n        }\n        if (!Array.isArray(definition.update)) {\n            return table + \" must define an explicit update list\";\n        }\n        if (!definition.update.every(column =>\n            columns.includes(column) && !definition.conflict.includes(column)\n        )) {\n            return table + \" update list is unknown or overlaps its conflict key\";\n        }\n        if (!Number.isFinite(definition.order)) {\n            return table + \" must define a finite order\";\n        }\n    }\n    return null;\n}\n\nfunction validatePlan(plan) {\n    if (!plainObject(plan)) return \"plan must be an object\";\n    if (plan.version !== PLAN_VERSION) {\n        return \"unsupported plan version \" + plan.version;\n    }\n    if (typeof plan.eventId !== \"string\" || !plan.eventId) {\n        return \"eventId must be a non-empty string\";\n    }\n    if (!plainObject(plan.writes) || !Object.keys(plan.writes).length) {\n        return \"writes must contain at least one registered table\";\n    }\n\n    for (const [table, rows] of Object.entries(plan.writes)) {\n        const definition = REGISTRY[table];\n        if (!definition) return \"table \" + table + \" is not registered\";\n        if (!Array.isArray(rows) || !rows.length) {\n            return table + \" must contain at least one row\";\n        }\n\n        for (const [index, row] of rows.entries()) {\n            if (!plainObject(row)) {\n                return table + \"[\" + index + \"] must be an object\";\n            }\n            const unknown = Object.keys(row).filter(\n                column => !Object.hasOwn(definition.columns, column)\n            );\n            if (unknown.length) {\n                return table + \"[\" + index + \"] has unknown columns: \" +\n                    unknown.join(\", \");\n            }\n            for (const [column, specification] of Object.entries(definition.columns)) {\n                if (!Object.hasOwn(row, column) || row[column] == null) {\n                    return table + \"[\" + index + \"].\" + column + \" is required\";\n                }\n                if (!TYPES[specification.type].validate(row[column])) {\n                    return table + \"[\" + index + \"].\" + column +\n                        \" must be \" + specification.type;\n                }\n            }\n        }\n    }\n    return null;\n}\n\nconst plans = Array.isArray(msg.payload) ? msg.payload : [];\nconst leases = msg.outbox?.batch;\nconst registryError = validateRegistry();\nif (registryError) {\n    msg.outbox = {\n        ...msg.outbox,\n        retryable: true,\n        circuitFailure: true,\n        failureClass: \"configuration\",\n        error: \"Invalid write-plan registry: \" + registryError\n    };\n    return [null, msg];\n}\nif (!Array.isArray(leases) || plans.length !== leases.length) {\n    msg.outbox = {\n        ...msg.outbox,\n        retryable: true,\n        circuitFailure: true,\n        failureClass: \"configuration\",\n        error: \"Claim payload and lease metadata are not aligned\"\n    };\n    return [null, msg];\n}\n\nconst validPlans = [];\nconst validLeases = [];\nconst invalidPlans = [];\nconst invalidLeases = [];\nconst validationErrors = [];\n\nplans.forEach((plan, index) => {\n    const error = validatePlan(plan);\n    if (error) {\n        invalidPlans.push(plan);\n        invalidLeases.push(leases[index]);\n        validationErrors.push({\n            id: leases[index]?.id,\n            eventId: plan?.eventId,\n            error\n        });\n    } else {\n        validPlans.push(plan);\n        validLeases.push(leases[index]);\n    }\n});\n\nlet invalidMessage = null;\nif (invalidPlans.length) {\n    invalidMessage = {\n        ...msg,\n        payload: invalidPlans,\n        outbox: {\n            ...msg.outbox,\n            batch: invalidLeases,\n            retryable: false,\n            circuitFailure: false,\n            failureClass: \"data\",\n            error: JSON.stringify(validationErrors),\n            validationErrors\n        }\n    };\n}\nif (!validPlans.length) return [null, invalidMessage];\n\nconst rowsByTable = Object.fromEntries(\n    Object.keys(REGISTRY).map(table => [table, []])\n);\nfor (const plan of validPlans) {\n    for (const [table, rows] of Object.entries(plan.writes)) {\n        rowsByTable[table].push(...rows);\n    }\n}\nfor (const [table, definition] of Object.entries(REGISTRY)) {\n    const deduplicated = new Map();\n    for (const row of rowsByTable[table]) {\n        const key = JSON.stringify(\n            definition.conflict.map(column => row[column])\n        );\n        deduplicated.set(key, row);\n    }\n    rowsByTable[table] = [...deduplicated.values()];\n}\n\nconst quoteIdentifier = value => '\"' + value.replaceAll('\"', '\"\"') + '\"';\nconst quoteLiteral = value => \"'\" + value.replaceAll(\"'\", \"''\") + \"'\";\nconst definitions = Object.entries(REGISTRY)\n    .filter(([table]) => rowsByTable[table].length)\n    .sort(([, left], [, right]) => left.order - right.order);\nconst ctes = [\"input(doc) AS (VALUES ($1::jsonb))\"];\n\nfor (const [index, [table, definition]] of definitions.entries()) {\n    const columns = Object.keys(definition.columns);\n    const recordDefinition = columns\n        .map(column => quoteIdentifier(column) + \" \" +\n            TYPES[definition.columns[column].type].sql)\n        .join(\", \");\n    const selectedColumns = columns\n        .map(column => \"row_data.\" + quoteIdentifier(column))\n        .join(\", \");\n    const conflict = definition.conflict.map(quoteIdentifier).join(\", \");\n    const action = definition.update.length\n        ? \"UPDATE SET \" + definition.update\n            .map(column => {\n                const quoted = quoteIdentifier(column);\n                return quoted + \" = EXCLUDED.\" + quoted;\n            })\n            .join(\", \")\n        : \"NOTHING\";\n\n    ctes.push(\"upsert_\" + index + \" AS (\\n\" +\n        \"        INSERT INTO \" + quoteIdentifier(table) +\n        \" (\" + columns.map(quoteIdentifier).join(\", \") + \")\\n\" +\n        \"        SELECT \" + selectedColumns + \"\\n\" +\n        \"        FROM input\\n\" +\n        \"        CROSS JOIN LATERAL jsonb_to_recordset(\\n\" +\n        \"            COALESCE(input.doc -> \" + quoteLiteral(table) +\n        \", '[]'::jsonb)\\n\" +\n        \"        ) AS row_data(\" + recordDefinition + \")\\n\" +\n        \"        ON CONFLICT (\" + conflict + \") DO \" + action + \"\\n\" +\n        \"        RETURNING 1\\n\" +\n        \"    )\");\n}\n\nconst counts = definitions\n    .map(([table], index) =>\n        quoteLiteral(table) + \", (SELECT COUNT(*) FROM upsert_\" + index + \")\"\n    )\n    .join(\", \");\n\nmsg.query = \"WITH\\n\" + ctes.join(\",\\n\") +\n    \"\\nSELECT jsonb_build_object(\" + counts + \") AS affected;\";\nmsg.params = [JSON.stringify(rowsByTable)];\nmsg.payload = validPlans;\nmsg.outbox = {\n    ...msg.outbox,\n    batch: validLeases,\n    planVersion: PLAN_VERSION,\n    planSummary: {\n        plans: validPlans.length,\n        rows: Object.fromEntries(\n            Object.entries(rowsByTable).map(([table, rows]) => [\n                table,\n                rows.length\n            ])\n        )\n    }\n};\nreturn [msg, invalidMessage];",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
@@ -403,7 +403,7 @@
         "z": "32e3cba513b07c09",
         "g": "c063d286bb8c24cc",
         "name": "CREATE TABLE IF NOT EXISTS",
-        "query": "CREATE TABLE IF NOT EXISTS sensor_readings (\n    device_id   TEXT NOT NULL,\n    observed_at TIMESTAMPTZ NOT NULL,\n    value_mm    DOUBLE PRECISION NOT NULL,\n    PRIMARY KEY (device_id, observed_at)\n);\n\nCREATE TABLE IF NOT EXISTS sensor_health (\n    device_id   TEXT NOT NULL,\n    observed_at TIMESTAMPTZ NOT NULL,\n    batt_mv     INTEGER NOT NULL,\n    rssi_dbm    DOUBLE PRECISION NOT NULL,\n    PRIMARY KEY (device_id, observed_at)\n);",
+        "query": "CREATE TABLE IF NOT EXISTS sensor_readings (\n    device_id   TEXT NOT NULL,\n    observed_at TIMESTAMPTZ NOT NULL,\n    value_mm    DOUBLE PRECISION NOT NULL,\n    PRIMARY KEY (device_id, observed_at)\n);\n\nCREATE TABLE IF NOT EXISTS sensor_health (\n    device_id   TEXT NOT NULL,\n    observed_at TIMESTAMPTZ NOT NULL,\n    batt_mv     INTEGER NOT NULL,\n    rssi_dbm    DOUBLE PRECISION NOT NULL,\n    PRIMARY KEY (device_id, observed_at)\n);\n\nCREATE TABLE IF NOT EXISTS errors (\n    event_id     TEXT NOT NULL,\n    time         TIMESTAMPTZ NOT NULL,\n    dev_id       TEXT NOT NULL,\n    deployment_id TEXT NOT NULL,\n    level        TEXT NOT NULL,\n    message      TEXT NOT NULL,\n    type         TEXT NOT NULL,\n    source       TEXT NOT NULL,\n    data         JSONB NOT NULL,\n    UNIQUE (event_id, time)\n);",
         "postgreSQLConfig": "nosql-postgres-config",
         "split": false,
         "rowsPerMsg": 1,
@@ -736,6 +736,300 @@
         "statusType": "auto",
         "x": 800,
         "y": 280,
+        "wires": []
+    },
+    {
+        "id": "633c6bd795f928eb",
+        "type": "subflow",
+        "name": "Log Error → Durable WritePlan",
+        "info": "Formats a caught Node-RED error as a versioned WritePlan and durably\nenqueues it to the selected outbox sink. Run exactly one No-SQL Outbox worker\nfor that sink; logger instances enqueue only and do not create pollers.\n\nFor an existing table, apply:\n\nALTER TABLE errors ADD COLUMN IF NOT EXISTS event_id TEXT;\nCREATE UNIQUE INDEX IF NOT EXISTS errors_event_id_time_uidx\n    ON errors (event_id, time);\n\nThe stable conflict key keeps retries after ambiguous PostgreSQL timeouts\nidempotent.",
+        "category": "common",
+        "in": [
+            {
+                "x": 80,
+                "y": 120,
+                "wires": [
+                    {
+                        "id": "error-plan-format"
+                    }
+                ]
+            }
+        ],
+        "out": [
+            {
+                "x": 620,
+                "y": 100,
+                "wires": [
+                    {
+                        "id": "error-plan-enqueue",
+                        "port": 0
+                    }
+                ]
+            }
+        ],
+        "env": [
+            {
+                "name": "OUTBOX_SINK",
+                "type": "outbox-sink-config",
+                "value": "",
+                "ui": {
+                    "label": {
+                        "en-US": "Sink"
+                    },
+                    "type": "conf-types"
+                }
+            }
+        ],
+        "meta": {},
+        "color": "#FF9999",
+        "icon": "font-awesome/fa-exclamation-triangle",
+        "inputLabels": [
+            "caught error"
+        ],
+        "outputLabels": [
+            "durably accepted"
+        ],
+        "status": {
+            "x": 620,
+            "y": 180,
+            "wires": [
+                {
+                    "id": "error-plan-status",
+                    "port": 0
+                }
+            ]
+        }
+    },
+    {
+        "id": "error-plan-format",
+        "type": "function",
+        "z": "633c6bd795f928eb",
+        "name": "Build Error WritePlan v1",
+        "func": "const MAX_DEPTH = 6;\nconst MAX_KEYS = 100;\nconst MAX_ITEMS = 100;\nconst MAX_STRING = 8192;\n\nfunction safeValue(value, seen = new Set(), depth = 0) {\n    if (value == null) return value;\n    if (typeof value === \"string\") {\n        return value.length <= MAX_STRING\n            ? value\n            : value.slice(0, MAX_STRING) + \"…[truncated]\";\n    }\n    if (typeof value === \"boolean\") return value;\n    if (typeof value === \"number\") return Number.isFinite(value) ? value : null;\n    if (typeof value === \"bigint\") return value.toString();\n    if (typeof value === \"undefined\") return null;\n    if (typeof value === \"function\" || typeof value === \"symbol\") {\n        return String(value);\n    }\n    if (depth >= MAX_DEPTH) return \"[Maximum depth]\";\n    if (seen.has(value)) return \"[Circular]\";\n\n    const tag = Object.prototype.toString.call(value);\n    if (tag === \"[object Date]\") {\n        const time = value.getTime();\n        return Number.isFinite(time) ? value.toISOString() : \"Invalid Date\";\n    }\n    if (Buffer.isBuffer(value)) {\n        return {\n            type: \"Buffer\",\n            length: value.length,\n            base64: value.toString(\"base64\")\n        };\n    }\n\n    seen.add(value);\n    try {\n        if (Array.isArray(value)) {\n            const result = value.slice(0, MAX_ITEMS)\n                .map(child => safeValue(child, seen, depth + 1));\n            if (value.length > MAX_ITEMS) {\n                result.push(\"[Additional items truncated]\");\n            }\n            return result;\n        }\n\n        const errorObject = tag === \"[object Error]\";\n        const standardKeys = errorObject\n            ? [\"name\", \"message\", \"code\", \"stack\", \"cause\"]\n            : [];\n        const keys = [...new Set([...standardKeys, ...Object.keys(value).sort()])]\n            .slice(0, MAX_KEYS);\n        const result = {};\n        for (const key of keys) {\n            let child;\n            try {\n                child = value[key];\n            } catch (cause) {\n                child = \"[Unreadable property: \" + cause.message + \"]\";\n            }\n            if (child !== undefined) {\n                result[key] = safeValue(child, seen, depth + 1);\n            }\n        }\n        return result;\n    } finally {\n        seen.delete(value);\n    }\n}\n\nconst original = msg;\nconst caught = msg.error || {};\nconst source = caught.source || {};\nconst occurred = new Date(msg.timestamp || Date.now());\nconst occurredAt = Number.isFinite(occurred.getTime())\n    ? occurred.toISOString()\n    : new Date().toISOString();\nconst sourceId = String(source.id || source.name || \"nodered\");\nconst sourceName = source.name\n    ? String(source.type || \"node\") + \"::\" + String(source.name)\n    : \"nodered\";\nconst occurrence = Number(source.count) || 1;\nconst identity = msg._msgid\n    ? String(msg._msgid)\n    : occurredAt + \":\" + String(caught.message || \"unknown\");\nconst eventId = [\n    \"nodered-error-v1\",\n    encodeURIComponent(sourceId),\n    encodeURIComponent(identity),\n    occurrence\n].join(\":\");\n\nconst plan = {\n    payload: {\n        version: 1,\n        eventId,\n        writes: {\n            errors: [{\n                event_id: eventId,\n                time: occurredAt,\n                dev_id: String(msg.dev_id || \"unknown\"),\n                deployment_id: String(msg.deployment_id || \"unknown\"),\n                level: \"error\",\n                message: String(caught.message || \"Unknown Node-RED error\"),\n                type: \"error\",\n                source: sourceName,\n                data: {\n                    error: safeValue(caught),\n                    originalSensorPayload: safeValue(msg.originalSensorPayload),\n                    hypertables: safeValue(msg.hypertables),\n                    tables: safeValue(msg.tables)\n                }\n            }]\n        }\n    },\n    outbox: {\n        dedupeKey: \"postgres-error:v1:\" + eventId\n    }\n};\n\nreturn [plan, original];",
+        "outputs": 2,
+        "outputLabels": [
+            "write plan",
+            "original error"
+        ],
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 270,
+        "y": 120,
+        "wires": [
+            [
+                "error-plan-enqueue"
+            ],
+            [
+                "error-display-switch"
+            ]
+        ]
+    },
+    {
+        "id": "error-plan-enqueue",
+        "type": "outbox-enqueue",
+        "z": "633c6bd795f928eb",
+        "name": "Persist error plan",
+        "sink": "${OUTBOX_SINK}",
+        "payloadProperty": "payload",
+        "x": 480,
+        "y": 100,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "error-display-switch",
+        "type": "switch",
+        "z": "633c6bd795f928eb",
+        "name": "Show in debug?",
+        "property": "hideErrorFromConsole",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "true"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 470,
+        "y": 140,
+        "wires": [
+            [],
+            [
+                "error-display-debug"
+            ]
+        ]
+    },
+    {
+        "id": "error-display-debug",
+        "type": "debug",
+        "z": "633c6bd795f928eb",
+        "name": "Caught error",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "error.message",
+        "targetType": "msg",
+        "statusVal": "error.message",
+        "statusType": "msg",
+        "x": 670,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "error-plan-catch",
+        "type": "catch",
+        "z": "633c6bd795f928eb",
+        "name": "Error while logging error",
+        "scope": [
+            "error-plan-format",
+            "error-plan-enqueue"
+        ],
+        "uncaught": false,
+        "x": 280,
+        "y": 200,
+        "wires": [
+            [
+                "error-plan-failure-debug"
+            ]
+        ]
+    },
+    {
+        "id": "error-plan-failure-debug",
+        "type": "debug",
+        "z": "633c6bd795f928eb",
+        "name": "Error logging failed",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 520,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "error-plan-status",
+        "type": "status",
+        "z": "633c6bd795f928eb",
+        "name": "",
+        "scope": [
+            "error-plan-enqueue"
+        ],
+        "x": 470,
+        "y": 180,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "error-demo-group",
+        "type": "group",
+        "z": "32e3cba513b07c09",
+        "name": "2. Durable error logging",
+        "style": {
+            "label": true
+        },
+        "nodes": [
+            "error-demo-inject",
+            "error-demo-build",
+            "error-demo-instance",
+            "error-demo-debug"
+        ],
+        "x": 934,
+        "y": 39,
+        "w": 672,
+        "h": 122
+    },
+    {
+        "id": "error-demo-inject",
+        "type": "inject",
+        "z": "32e3cba513b07c09",
+        "g": "error-demo-group",
+        "name": "simulate caught error",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 1040,
+        "y": 100,
+        "wires": [
+            [
+                "error-demo-build"
+            ]
+        ]
+    },
+    {
+        "id": "error-demo-build",
+        "type": "function",
+        "z": "32e3cba513b07c09",
+        "g": "error-demo-group",
+        "name": "Example Catch message",
+        "func": "msg.timestamp = Date.now();\nmsg.dev_id = \"nosql-sensor-1\";\nmsg.deployment_id = \"demo-deployment\";\nmsg.error = {\n    message: \"Example ingestion failure\",\n    source: {\n        id: \"demo-transform\",\n        type: \"function\",\n        name: \"Transform reading\",\n        count: 1\n    },\n    cause: new Error(\"Example nested cause\")\n};\nmsg.originalSensorPayload = { value: 42 };\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1250,
+        "y": 100,
+        "wires": [
+            [
+                "error-demo-instance"
+            ]
+        ]
+    },
+    {
+        "id": "error-demo-instance",
+        "type": "subflow:633c6bd795f928eb",
+        "z": "32e3cba513b07c09",
+        "g": "error-demo-group",
+        "name": "",
+        "env": [
+            {
+                "name": "OUTBOX_SINK",
+                "value": "nosql-sink-config",
+                "type": "conf-type"
+            }
+        ],
+        "x": 1460,
+        "y": 100,
+        "wires": [
+            [
+                "error-demo-debug"
+            ]
+        ]
+    },
+    {
+        "id": "error-demo-debug",
+        "type": "debug",
+        "z": "32e3cba513b07c09",
+        "g": "error-demo-group",
+        "name": "error durably accepted",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "outbox.result",
+        "targetType": "msg",
+        "statusVal": "outbox.result.queueDepth & \" queued\"",
+        "statusType": "jsonata",
+        "x": 1480,
+        "y": 140,
         "wires": []
     }
 ]

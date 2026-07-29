@@ -106,7 +106,7 @@ test("No-SQL worker uses batch claims and partitions leases with their plans", (
     assert.equal(validMessage.outbox.planVersion, 1);
     assert.deepEqual(
         Object.keys(JSON.parse(validMessage.params[0])).sort(),
-        ["sensor_health", "sensor_readings"]
+        ["errors", "sensor_health", "sensor_readings"]
     );
 
     assert.deepEqual(invalidMessage.payload, [decodedInvalidPlan]);
@@ -159,5 +159,99 @@ test("No-SQL registry owns types, update policy, and the durable sink version", 
     assert.match(
         invalidMessage.outbox.validationErrors[0].error,
         /observed_at must be timestamptz/
+    );
+});
+
+test("durable error logger emits a safe idempotent WritePlan", () => {
+    const logger = flow.find(node => node.type === "subflow" &&
+        node.name === "Log Error → Durable WritePlan");
+    const formatter = findNode("function", "Build Error WritePlan v1");
+    const enqueue = findNode("outbox-enqueue", "Persist error plan");
+    const compiler = findNode("function", "Validate + compile registry");
+    const schema = findNode("postgresql", "CREATE TABLE IF NOT EXISTS");
+
+    assert.ok(logger);
+    assert.ok(formatter);
+    assert.equal(enqueue.sink, "${OUTBOX_SINK}");
+    assert.match(schema.query, /UNIQUE \(event_id, time\)/);
+
+    const cause = new Error("socket timeout");
+    const caughtMessage = {
+        _msgid: "message-123",
+        timestamp: Date.parse("2026-07-29T12:00:00.000Z"),
+        dev_id: "sensor-4",
+        deployment_id: "deployment-1",
+        error: {
+            message: "PostgreSQL request failed",
+            source: {
+                id: "postgres-node",
+                type: "postgresql",
+                name: "Insert readings",
+                count: 1
+            },
+            cause
+        },
+        originalSensorPayload: { value: 42 }
+    };
+    cause.cause = caughtMessage.error;
+
+    const format = new Function("msg", "node", formatter.func);
+    const [planMessage, originalMessage] = format(caughtMessage, { warn() {} });
+    const [samePlanMessage] = format({ ...caughtMessage }, { warn() {} });
+    const plan = planMessage.payload;
+    const row = plan.writes.errors[0];
+
+    assert.equal(originalMessage, caughtMessage);
+    assert.equal(plan.version, 1);
+    assert.equal(plan.eventId, samePlanMessage.payload.eventId);
+    assert.equal(row.event_id, plan.eventId);
+    assert.equal(row.time, "2026-07-29T12:00:00.000Z");
+    assert.equal(row.data.error.cause.message, "socket timeout");
+    assert.equal(row.data.error.cause.cause, "[Circular]");
+    assert.doesNotThrow(() => JSON.stringify(plan));
+    assert.equal(
+        planMessage.outbox.dedupeKey,
+        "postgres-error:v1:" + plan.eventId
+    );
+
+    const compile = new Function("msg", "node", compiler.func);
+    const lease = { id: "error-lease", token: "error-token" };
+    const [compiled, invalid] = compile({
+        payload: [vm.runInNewContext("JSON.parse(input)", {
+            input: JSON.stringify(plan)
+        })],
+        outbox: { batch: [lease] }
+    }, { warn() {} });
+
+    assert.equal(invalid, null);
+    assert.deepEqual(compiled.outbox.batch, [lease]);
+    assert.match(compiled.query, /INSERT INTO "errors"/);
+    assert.match(compiled.query, /ON CONFLICT \("event_id", "time"\) DO NOTHING/);
+    assert.doesNotMatch(compiled.query, /INSERT INTO "sensor_readings"/);
+    assert.doesNotMatch(compiled.query, /INSERT INTO "sensor_health"/);
+});
+
+test("error logger instances enqueue without multiplying No-SQL workers", () => {
+    const noSqlSubflow = flow.find(node => node.type === "subflow" &&
+        node.name === "No-SQL Outbox");
+    const loggerSubflow = flow.find(node => node.type === "subflow" &&
+        node.name === "Log Error → Durable WritePlan");
+    const workers = flow.filter(node =>
+        node.type === `subflow:${noSqlSubflow.id}`
+    );
+    const loggerChildren = flow.filter(node => node.z === loggerSubflow.id);
+
+    assert.equal(workers.length, 1);
+    assert.equal(
+        loggerChildren.filter(node => node.type === "outbox-enqueue").length,
+        1
+    );
+    assert.equal(
+        loggerChildren.some(node => node.type === `subflow:${noSqlSubflow.id}`),
+        false
+    );
+    assert.equal(
+        loggerChildren.some(node => node.type === "inject" && node.repeat),
+        false
     );
 });

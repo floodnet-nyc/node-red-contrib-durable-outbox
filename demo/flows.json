@@ -23,6 +23,14 @@
         "env": []
     },
     {
+        "id": "18efa87b2fc293ed",
+        "type": "tab",
+        "label": "Flow 1",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
         "id": "demo-flow",
         "type": "tab",
         "label": "Durable PostgreSQL outbox demo",
@@ -526,6 +534,75 @@
         "h": 122
     },
     {
+        "id": "a6ef0ef003b9d71b",
+        "type": "group",
+        "z": "32e3cba513b07c09",
+        "name": "Validate counts",
+        "style": {
+            "label": true
+        },
+        "nodes": [
+            "b7bf4aaba6ba3ec6",
+            "e96a45d4955f9807",
+            "6efe50fa2be11827"
+        ],
+        "x": 74,
+        "y": 719,
+        "w": 552,
+        "h": 82
+    },
+    {
+        "id": "15fb5b58e56136d1",
+        "type": "group",
+        "z": "5143175b934accee",
+        "name": "6. Housekeeping — periodic cleanup (optional, for production)",
+        "style": {
+            "label": true
+        },
+        "nodes": [
+            "39b77937b067d67c",
+            "a59b74c95f41f9a7"
+        ],
+        "x": 114,
+        "y": 399,
+        "w": 492,
+        "h": 82
+    },
+    {
+        "id": "2fe252a37da60650",
+        "type": "group",
+        "z": "bd2fa914d5e13474",
+        "name": "6. Housekeeping — periodic cleanup (optional, for production)",
+        "style": {
+            "label": true
+        },
+        "nodes": [
+            "43b355dd3c9d8367",
+            "43ecd0374731df57"
+        ],
+        "x": 214,
+        "y": 439,
+        "w": 492,
+        "h": 82
+    },
+    {
+        "id": "8e8b072a0908c492",
+        "type": "group",
+        "z": "629498338552fa25",
+        "name": "6. Housekeeping — periodic cleanup (optional, for production)",
+        "style": {
+            "label": true
+        },
+        "nodes": [
+            "9df766416db8979b",
+            "0d037b55fe14e062"
+        ],
+        "x": 114,
+        "y": 439,
+        "w": 492,
+        "h": 82
+    },
+    {
         "id": "outbox-config",
         "type": "durable-outbox-config",
         "name": "Demo outbox",
@@ -830,6 +907,54 @@
         ]
     },
     {
+        "id": "9df766416db8979b",
+        "type": "inject",
+        "z": "629498338552fa25",
+        "g": "8e8b072a0908c492",
+        "name": "Purge older than 1 day",
+        "props": [
+            {
+                "p": "outbox.olderThanMs",
+                "v": "3600000",
+                "vt": "num"
+            },
+            {
+                "p": "outbox.limit",
+                "v": "1000",
+                "vt": "num"
+            }
+        ],
+        "repeat": "3600",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "6",
+        "topic": "",
+        "x": 270,
+        "y": 480,
+        "wires": [
+            [
+                "0d037b55fe14e062"
+            ]
+        ]
+    },
+    {
+        "id": "0d037b55fe14e062",
+        "type": "outbox-control",
+        "z": "629498338552fa25",
+        "g": "8e8b072a0908c492",
+        "name": "Purge delivered",
+        "action": "purge-delivered",
+        "sink": "${OUTBOX_SINK}",
+        "failureClass": "",
+        "limit": 1000,
+        "olderThanMs": "86400000",
+        "x": 500,
+        "y": 480,
+        "wires": [
+            []
+        ]
+    },
+    {
         "id": "46d938d31797f85d",
         "type": "inject",
         "z": "5143175b934accee",
@@ -996,6 +1121,54 @@
         ]
     },
     {
+        "id": "39b77937b067d67c",
+        "type": "inject",
+        "z": "5143175b934accee",
+        "g": "15fb5b58e56136d1",
+        "name": "Purge older than 1 day",
+        "props": [
+            {
+                "p": "outbox.olderThanMs",
+                "v": "3600000",
+                "vt": "num"
+            },
+            {
+                "p": "outbox.limit",
+                "v": "10000",
+                "vt": "num"
+            }
+        ],
+        "repeat": "900",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "60",
+        "topic": "",
+        "x": 270,
+        "y": 440,
+        "wires": [
+            [
+                "a59b74c95f41f9a7"
+            ]
+        ]
+    },
+    {
+        "id": "a59b74c95f41f9a7",
+        "type": "outbox-control",
+        "z": "5143175b934accee",
+        "g": "15fb5b58e56136d1",
+        "name": "Purge delivered",
+        "action": "purge-delivered",
+        "sink": "${OUTBOX_SINK}",
+        "failureClass": "",
+        "limit": "1000",
+        "olderThanMs": "86400000",
+        "x": 500,
+        "y": 440,
+        "wires": [
+            []
+        ]
+    },
+    {
         "id": "151cab56034f8aa3",
         "type": "inject",
         "z": "bd2fa914d5e13474",
@@ -1153,6 +1326,54 @@
         ]
     },
     {
+        "id": "43b355dd3c9d8367",
+        "type": "inject",
+        "z": "bd2fa914d5e13474",
+        "g": "2fe252a37da60650",
+        "name": "Purge older than 1 day",
+        "props": [
+            {
+                "p": "outbox.olderThanMs",
+                "v": "3600000",
+                "vt": "num"
+            },
+            {
+                "p": "outbox.limit",
+                "v": "1000",
+                "vt": "num"
+            }
+        ],
+        "repeat": "3600",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "60",
+        "topic": "",
+        "x": 370,
+        "y": 480,
+        "wires": [
+            [
+                "43ecd0374731df57"
+            ]
+        ]
+    },
+    {
+        "id": "43ecd0374731df57",
+        "type": "outbox-control",
+        "z": "bd2fa914d5e13474",
+        "g": "2fe252a37da60650",
+        "name": "Purge delivered",
+        "action": "purge-delivered",
+        "sink": "${OUTBOX_SINK}",
+        "failureClass": "",
+        "limit": 1000,
+        "olderThanMs": "86400000",
+        "x": 600,
+        "y": 480,
+        "wires": [
+            []
+        ]
+    },
+    {
         "id": "642f83ec480a62f8",
         "type": "inject",
         "z": "22a07776c86a0b11",
@@ -1233,6 +1454,57 @@
             [],
             []
         ]
+    },
+    {
+        "id": "80fd8f7de7af3a8e",
+        "type": "inject",
+        "z": "22a07776c86a0b11",
+        "name": "Inspect queue health",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "x": 220,
+        "y": 340,
+        "wires": [
+            [
+                "f32aaec7b10329de"
+            ]
+        ]
+    },
+    {
+        "id": "f32aaec7b10329de",
+        "type": "outbox-control",
+        "z": "22a07776c86a0b11",
+        "name": "Status",
+        "action": "status",
+        "sink": "postgres-outbox-sink",
+        "failureClass": "",
+        "limit": 100,
+        "olderThanMs": "",
+        "x": 438,
+        "y": 341,
+        "wires": [
+            [
+                "f2ee385681f0d975"
+            ]
+        ]
+    },
+    {
+        "id": "f2ee385681f0d975",
+        "type": "debug",
+        "z": "22a07776c86a0b11",
+        "name": "debug 7",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 640,
+        "y": 340,
+        "wires": []
     },
     {
         "id": "6b56f97624625685",
@@ -1616,7 +1888,7 @@
         "y": 100,
         "wires": [
             [
-                "d43de4ce5526e3ca"
+                "6f345136206c588b"
             ]
         ]
     },
@@ -1678,7 +1950,7 @@
                 "type": "conf-type"
             }
         ],
-        "x": 600,
+        "x": 680,
         "y": 120,
         "wires": [
             [],
@@ -1700,7 +1972,7 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 780,
+        "x": 860,
         "y": 100,
         "wires": []
     },
@@ -1716,7 +1988,7 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 780,
+        "x": 860,
         "y": 140,
         "wires": []
     },
@@ -1729,12 +2001,91 @@
         "tosidebar": true,
         "console": false,
         "tostatus": false,
-        "complete": "false",
+        "complete": "true",
+        "targetType": "full",
         "statusVal": "",
         "statusType": "auto",
-        "x": 780,
+        "x": 860,
         "y": 180,
         "wires": []
+    },
+    {
+        "id": "b7bf4aaba6ba3ec6",
+        "type": "inject",
+        "z": "32e3cba513b07c09",
+        "g": "a6ef0ef003b9d71b",
+        "name": "",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 170,
+        "y": 760,
+        "wires": [
+            [
+                "e96a45d4955f9807"
+            ]
+        ]
+    },
+    {
+        "id": "e96a45d4955f9807",
+        "type": "postgresql",
+        "z": "32e3cba513b07c09",
+        "g": "a6ef0ef003b9d71b",
+        "name": "select count(*)",
+        "query": "select count(*) \nfrom sensor_readings \nwhere observed_at between NOW() - INTERVAL '1 hour' TO NOW()",
+        "postgreSQLConfig": "nosql-postgres-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 320,
+        "y": 760,
+        "wires": [
+            [
+                "6efe50fa2be11827"
+            ]
+        ]
+    },
+    {
+        "id": "6efe50fa2be11827",
+        "type": "debug",
+        "z": "32e3cba513b07c09",
+        "g": "a6ef0ef003b9d71b",
+        "name": "",
+        "active": false,
+        "tosidebar": false,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload[0]",
+        "statusType": "msg",
+        "x": 510,
+        "y": 760,
+        "wires": []
+    },
+    {
+        "id": "6f345136206c588b",
+        "type": "msg-speed",
+        "z": "32e3cba513b07c09",
+        "name": "",
+        "frequency": "sec",
+        "interval": 1,
+        "estimation": false,
+        "ignore": false,
+        "pauseAtStartup": false,
+        "topicDependent": false,
+        "x": 515,
+        "y": 100,
+        "wires": [
+            [],
+            [
+                "d43de4ce5526e3ca"
+            ]
+        ],
+        "l": false
     },
     {
         "id": "generate-reading",

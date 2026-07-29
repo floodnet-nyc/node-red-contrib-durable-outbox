@@ -541,7 +541,7 @@ To purge at most 1,000 delivered records older than one day:
 
 ```js
 msg.outbox.action = "purge-delivered";
-msg.outbox.olderThanMs = 24 * 60 * 60 * 1000;
+msg.outbox.olderThanMs = "24h";
 msg.outbox.limit = 1000;
 return msg;
 ```

@@ -30,24 +30,24 @@
         validate: RED.validators.number()
       },
       deliveredRetentionMs: {
-        value: 86400000,
+        value: "1d",
         required: true,
         validate: function (value) {
-          return Number.isFinite(Number(value)) && Number(value) >= 0;
+          return value != null && value !== "";
         }
       },
       deadLetterRetentionMs: {
-        value: 2592000000,
+        value: "30d",
         required: true,
         validate: function (value) {
-          return Number.isFinite(Number(value)) && Number(value) >= 0;
+          return value != null && value !== "";
         }
       },
       cleanupIntervalMs: {
-        value: 60000,
+        value: "60s",
         required: true,
         validate: function (value) {
-          return Number.isFinite(Number(value)) && Number(value) >= 1000;
+          return value != null && value !== "";
         }
       },
       cleanupBatchSize: {
@@ -91,14 +91,14 @@
       name: { value: "" },
       outbox: { value: "", type: "durable-outbox-config", required: true },
       sinkKey: { value: "", required: true },
-      leaseMs: { value: 60000, required: true, validate: RED.validators.number() },
+      leaseMs: { value: "60s", required: true },
       maxInFlight: { value: 10, required: true, validate: RED.validators.number() },
       batchSize: { value: 10, required: true, validate: RED.validators.number() },
       maxAttempts: { value: 10, required: true, validate: RED.validators.number() },
       retryUntilExpired: { value: "true" },
-      maxAgeMs: { value: 86400000, required: true, validate: RED.validators.number() },
-      baseDelayMs: { value: 2000, required: true, validate: RED.validators.number() },
-      maxDelayMs: { value: 300000, required: true, validate: RED.validators.number() },
+      maxAgeMs: { value: "1d", required: true },
+      baseDelayMs: { value: "2s", required: true },
+      maxDelayMs: { value: "5m", required: true },
       circuitBreakerEnabled: { value: true },
       circuitBreakerThreshold: {
         value: 3,
@@ -106,9 +106,8 @@
         validate: RED.validators.number()
       },
       circuitBreakerCooldownMs: {
-        value: 30000,
-        required: true,
-        validate: RED.validators.number()
+        value: "30s",
+        required: true
       }
     },
     oneditprepare: function () {
@@ -213,7 +212,7 @@
       sink: { value: "", type: "outbox-sink-config", required: true },
       failureClass: { value: "" },
       limit: { value: 100, validate: RED.validators.number() },
-      olderThanMs: { value: 86400000, validate: RED.validators.number() }
+      olderThanMs: { value: "1d" }
     },
     inputs: 1,
     outputs: 1,
@@ -290,16 +289,16 @@
     <h4><i class="fa fa-history"></i> Retention & cleanup</h4>
   </div>
   <div class="form-row">
-    <label for="node-config-input-deliveredRetentionMs">Delivered retention (ms)</label>
-    <input type="number" id="node-config-input-deliveredRetentionMs" min="0">
+    <label for="node-config-input-deliveredRetentionMs">Delivered retention</label>
+    <input type="text" id="node-config-input-deliveredRetentionMs" placeholder="1d">
   </div>
   <div class="form-row">
-    <label for="node-config-input-deadLetterRetentionMs">Dead-letter retention (ms)</label>
-    <input type="number" id="node-config-input-deadLetterRetentionMs" min="0">
+    <label for="node-config-input-deadLetterRetentionMs">Dead-letter retention</label>
+    <input type="text" id="node-config-input-deadLetterRetentionMs" placeholder="30d">
   </div>
   <div class="form-row">
-    <label for="node-config-input-cleanupIntervalMs">Cleanup interval (ms)</label>
-    <input type="number" id="node-config-input-cleanupIntervalMs" min="1000">
+    <label for="node-config-input-cleanupIntervalMs">Cleanup interval</label>
+    <input type="text" id="node-config-input-cleanupIntervalMs" placeholder="60s">
   </div>
   <div class="form-row">
     <label for="node-config-input-cleanupBatchSize">Cleanup batch size</label>
@@ -346,8 +345,8 @@
     <h4><i class="fa fa-tasks"></i> Worker capacity</h4>
   </div>
   <div class="form-row">
-    <label for="node-config-input-leaseMs">Lease timeout (ms)</label>
-    <input type="number" id="node-config-input-leaseMs">
+    <label for="node-config-input-leaseMs">Lease timeout</label>
+    <input type="text" id="node-config-input-leaseMs" placeholder="60s">
   </div>
   <div class="form-row">
     <label for="node-config-input-maxInFlight">Maximum in flight</label>
@@ -373,16 +372,16 @@
     <input type="number" id="node-config-input-maxAttempts">
   </div>
   <div class="form-row">
-    <label for="node-config-input-maxAgeMs">Maximum age (ms)</label>
-    <input type="number" id="node-config-input-maxAgeMs">
+    <label for="node-config-input-maxAgeMs">Maximum age</label>
+    <input type="text" id="node-config-input-maxAgeMs" placeholder="1d">
   </div>
   <div class="form-row">
-    <label for="node-config-input-baseDelayMs">Initial delay (ms)</label>
-    <input type="number" id="node-config-input-baseDelayMs">
+    <label for="node-config-input-baseDelayMs">Initial delay</label>
+    <input type="text" id="node-config-input-baseDelayMs" placeholder="2s">
   </div>
   <div class="form-row">
-    <label for="node-config-input-maxDelayMs">Maximum retry delay (ms)</label>
-    <input type="number" id="node-config-input-maxDelayMs">
+    <label for="node-config-input-maxDelayMs">Maximum retry delay</label>
+    <input type="text" id="node-config-input-maxDelayMs" placeholder="5m">
   </div>
 
   <div class="form-row">
@@ -398,8 +397,8 @@
     <input type="number" id="node-config-input-circuitBreakerThreshold">
   </div>
   <div class="form-row outbox-sink-circuit-setting-row">
-    <label for="node-config-input-circuitBreakerCooldownMs">Cooldown (ms)</label>
-    <input type="number" id="node-config-input-circuitBreakerCooldownMs">
+    <label for="node-config-input-circuitBreakerCooldownMs">Cooldown</label>
+    <input type="text" id="node-config-input-circuitBreakerCooldownMs" placeholder="30s">
   </div>
 </script>
 
@@ -491,8 +490,8 @@
     <input type="number" id="node-input-limit">
   </div>
   <div class="form-row outbox-control-older-than-row">
-    <label for="node-input-olderThanMs">Delivered age (ms)</label>
-    <input type="number" id="node-input-olderThanMs">
+    <label for="node-input-olderThanMs">Delivered age</label>
+    <input type="text" id="node-input-olderThanMs" placeholder="1d">
   </div>
 </script>
 
@@ -636,9 +635,11 @@
       Overrides the configured maximum number of dead letters to list or requeue. The default
       is 100.
     </dd>
-    <dt class="optional">msg.outbox.olderThanMs <span class="property-type">number</span></dt>
+    <dt class="optional">msg.outbox.olderThanMs <span class="property-type">duration</span></dt>
     <dd>
-      Age threshold for <code>purge-delivered</code>. The default is 86400000 (one day).
+      Age threshold for <code>purge-delivered</code>. The default is <code>"1d"</code>.
+      Accepts a duration string like <code>"24h"</code> or <code>"30d"</code>, or an
+      explicit millisecond number.
     </dd>
     <dt class="optional">msg.outbox.vacuum <span class="property-type">boolean</span></dt>
     <dd>

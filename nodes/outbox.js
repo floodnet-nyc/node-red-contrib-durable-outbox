@@ -2,22 +2,13 @@
 
 const { OutboxStore } = require("../lib/outbox-store");
 const D = require("../lib/defaults");
+const {
+  megabytesToBytes,
+  nonnegativeMegabytesToBytes,
+  parseDuration,
+} = require("../lib/units");
 
 module.exports = function registerOutboxNodes(RED) {
-  function megabytesToBytes(value, fallbackMb) {
-    const megabytes = Number(value);
-    const normalized =
-      Number.isFinite(megabytes) && megabytes > 0 ? megabytes : fallbackMb;
-    return Math.max(1, Math.round(normalized * 1_048_576));
-  }
-
-  function nonnegativeMegabytesToBytes(value, fallbackMb) {
-    const megabytes = Number(value);
-    const normalized =
-      Number.isFinite(megabytes) && megabytes >= 0 ? megabytes : fallbackMb;
-    return Math.max(0, Math.round(normalized * 1_048_576));
-  }
-
   function nonnegativeNumber(value, fallback) {
     const number = Number(value);
     return Number.isFinite(number) && number >= 0 ? number : fallback;
@@ -179,7 +170,7 @@ module.exports = function registerOutboxNodes(RED) {
     this.filename = config.filename;
     this.cleanupIntervalMs = Math.max(
       1_000,
-      nonnegativeNumber(config.cleanupIntervalMs, D.CLEANUP_INTERVAL_MS)
+      parseDuration(config.cleanupIntervalMs, D.CLEANUP_INTERVAL_MS)
     );
     const cleanupHighWatermarkPercent = nonnegativeNumber(
       config.cleanupHighWatermarkPercent,
@@ -207,11 +198,11 @@ module.exports = function registerOutboxNodes(RED) {
         config.minFreeDiskMb,
         256
       ),
-      deliveredRetentionMs: nonnegativeNumber(
+      deliveredRetentionMs: parseDuration(
         config.deliveredRetentionMs,
         D.DELIVERED_RETENTION_MS
       ),
-      deadLetterRetentionMs: nonnegativeNumber(
+      deadLetterRetentionMs: parseDuration(
         config.deadLetterRetentionMs,
         D.DEAD_LETTER_RETENTION_MS
       ),
@@ -280,7 +271,7 @@ module.exports = function registerOutboxNodes(RED) {
     this.outboxConfig = outboxConfig;
     this.store = outboxConfig.store;
     this.sinkKey = sinkKey;
-    this.leaseMs = positiveNumber(config.leaseMs, D.LEASE_MS);
+    this.leaseMs = parseDuration(config.leaseMs, D.LEASE_MS);
     this.maxInFlight = positiveNumber(config.maxInFlight, D.MAX_IN_FLIGHT);
     this.batchSize = positiveNumber(config.batchSize, D.BATCH_SIZE);
     this.maxAttempts = positiveNumber(config.maxAttempts, D.MAX_ATTEMPTS);
@@ -288,9 +279,9 @@ module.exports = function registerOutboxNodes(RED) {
       config.retryUntilExpired,
       D.RETRY_UNTIL_EXPIRED
     );
-    this.maxAgeMs = positiveNumber(config.maxAgeMs, D.MAX_AGE_MS);
-    this.baseDelayMs = positiveNumber(config.baseDelayMs, D.BASE_DELAY_MS);
-    this.maxDelayMs = positiveNumber(config.maxDelayMs, D.MAX_DELAY_MS);
+    this.maxAgeMs = parseDuration(config.maxAgeMs, D.MAX_AGE_MS);
+    this.baseDelayMs = parseDuration(config.baseDelayMs, D.BASE_DELAY_MS);
+    this.maxDelayMs = parseDuration(config.maxDelayMs, D.MAX_DELAY_MS);
     this.circuitBreakerEnabled =
       config.circuitBreakerEnabled !== false &&
       config.circuitBreakerEnabled !== "false";
@@ -298,7 +289,7 @@ module.exports = function registerOutboxNodes(RED) {
       config.circuitBreakerThreshold,
       D.CIRCUIT_THRESHOLD
     );
-    this.circuitBreakerCooldownMs = positiveNumber(
+    this.circuitBreakerCooldownMs = parseDuration(
       config.circuitBreakerCooldownMs,
       D.CIRCUIT_COOLDOWN_MS
     );
@@ -782,12 +773,10 @@ module.exports = function registerOutboxNodes(RED) {
         const sink = shell.sink || sinkConfig.sinkKey;
         const failureClass = shell.failureClass || config.failureClass || undefined;
         const limit = Number(shell.limit ?? config.limit) || 100;
-        const requestedAge = Number(
-          shell.olderThanMs ?? config.olderThanMs ?? D.MAX_AGE_MS
+        const olderThanMs = parseDuration(
+          shell.olderThanMs ?? config.olderThanMs,
+          D.MAX_AGE_MS
         );
-        const olderThanMs = Number.isFinite(requestedAge)
-          ? requestedAge
-          : D.MAX_AGE_MS;
         const id = shell.deadLetterId;
         const ids = shell.deadLetterIds ?? (id ? [id] : undefined);
         let result;

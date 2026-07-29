@@ -85,10 +85,10 @@
       outbox: { value: "", type: "durable-outbox-config", required: true },
       sinkKey: { value: "", required: true },
       leaseMs: { value: 60000, required: true, validate: RED.validators.number() },
-      maxInFlight: { value: 1, required: true, validate: RED.validators.number() },
+      maxInFlight: { value: 10, required: true, validate: RED.validators.number() },
       batchSize: { value: 10, required: true, validate: RED.validators.number() },
       maxAttempts: { value: 10, required: true, validate: RED.validators.number() },
-      retryUntilExpired: { value: "false" },
+      retryUntilExpired: { value: "true" },
       maxAgeMs: { value: 86400000, required: true, validate: RED.validators.number() },
       baseDelayMs: { value: 2000, required: true, validate: RED.validators.number() },
       maxDelayMs: { value: 300000, required: true, validate: RED.validators.number() },
@@ -106,6 +106,7 @@
     },
     oneditprepare: function () {
       const retryUntilExpired =
+        this.retryUntilExpired == null ||
         this.retryUntilExpired === true ||
         this.retryUntilExpired === "true";
       $("#node-config-input-retryUntilExpired").val(
@@ -511,6 +512,11 @@
     are shared by enqueue, claim, settle, and control nodes. Retry mode controls whether jobs
     stop at the attempt bound or continue until their maximum age. A disabled circuit breaker
     ignores automatic circuit pauses while manual pauses still apply.
+  </p>
+  <p>
+    By default, a poll can lease one complete 10-job batch and retryable failures remain
+    active until the 24-hour maximum age. Choose bounded-attempt mode explicitly for sinks
+    that should stop after 10 attempts.
   </p>
   <p>
     Jobs persist the <code>Sink key</code>, such as <code>postgres-primary</code>. They never

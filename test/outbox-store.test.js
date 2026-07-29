@@ -329,6 +329,7 @@ test("repeatedly abandoned leases dead-letter at the attempt bound", (t) => {
     sink: "postgres",
     payload: { value: 9 },
     maxAttempts: 2,
+    retryUntilExpired: false,
   });
 
   store.claim({ sink: "postgres", leaseMs: 100 });
@@ -386,6 +387,7 @@ test("success is retained and retry exhaustion moves atomically to dead letter",
       dedupeKey: "doomed",
       payload: { value: 2 },
       maxAttempts: 2,
+      retryUntilExpired: false,
     },
   ]);
 

@@ -115,6 +115,27 @@ test("durable outbox rejects inverted cleanup watermarks", () => {
   );
 });
 
+test("default sink enables one full batch and age-bounded retry", async () => {
+  const harness = createHarness();
+  const config = harness.instantiate("durable-outbox-config", {
+    id: "outbox",
+    filename: ":memory:",
+  });
+  const sink = harness.instantiate("outbox-sink-config", {
+    id: "default-sink",
+    outbox: "outbox",
+    sinkKey: "postgres",
+  });
+
+  assert.equal(config.store.maxJobBytes, 1_048_576);
+  assert.equal(sink.batchSize, 10);
+  assert.equal(sink.maxInFlight, 10);
+  assert.equal(sink.retryUntilExpired, true);
+  assert.equal(sink.maxAgeMs, 86_400_000);
+
+  await harness.close(config);
+});
+
 test("settle sends non-retryable failures to its dead-letter output", async () => {
   const harness = createHarness();
   const config = harness.instantiate("durable-outbox-config", {
@@ -247,6 +268,7 @@ test("batch claim preserves leases and batch settle partitions outcomes", async 
     maxInFlight: 3,
     batchSize: 3,
     maxAttempts: 3,
+    retryUntilExpired: false,
     circuitBreakerThreshold: 2,
   });
   const enqueue = harness.instantiate("outbox-enqueue", {

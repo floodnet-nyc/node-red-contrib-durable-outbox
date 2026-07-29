@@ -19,7 +19,7 @@ Install the module and create three configuration nodes, then wire four nodes:
 ```
 
 1. **`durable-outbox-config`** — Set the database path, e.g. `/data/outbox/outbox.sqlite`.
-2. **`outbox-sink-config`** — Point to the config above, set a `Sink key` (e.g. `postgres-primary`), enable `retry-until-expired` for idempotent sinks.
+2. **`outbox-sink-config`** — Point to the config above, set a `Sink key` (e.g. `postgres-primary`), and leave `retry-until-expired` enabled for idempotent sinks.
 3. **`outbox-enqueue`** — Select the sink config. Wire your data source into the input.
 4. **`outbox-claim`** — Select the same sink. Feed it a repeating Inject node (e.g. every 5s). Wire through your delivery node (e.g. a PostgreSQL upsert).
 5. **`outbox-settle`** — Select the same sink, set `Outcome: Success`. Wire the claim output (after your delivery node) into the settle input. The success path needs no message properties.
@@ -71,6 +71,11 @@ Its editor groups the policy into:
 - **Worker capacity:** lease timeout, maximum in-flight jobs, and claim batch size;
 - **Retry lifecycle:** bounded-attempt or maximum-age mode, age, and backoff defaults;
 - **Circuit breaker:** enablement, failure threshold, and cooldown.
+
+The defaults lease and claim up to 10 jobs, so the default batch is not
+artificially reduced to one job. Retryable failures remain active until the
+24-hour maximum age by default; select bounded-attempt mode explicitly when a
+sink should stop after 10 delivery attempts.
 
 The SQLite job stores the configured sink key, such as `postgres-primary`, not
 the generated Node-RED config-node ID.

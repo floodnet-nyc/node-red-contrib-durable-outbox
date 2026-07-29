@@ -135,9 +135,10 @@ module.exports = function registerOutboxNodes(RED) {
     this.maxInFlight = positiveNumber(config.maxInFlight, D.MAX_IN_FLIGHT);
     this.batchSize = positiveNumber(config.batchSize, D.BATCH_SIZE);
     this.maxAttempts = positiveNumber(config.maxAttempts, D.MAX_ATTEMPTS);
-    this.retryUntilExpired =
-      config.retryUntilExpired === true ||
-      config.retryUntilExpired === "true";
+    this.retryUntilExpired = booleanValue(
+      config.retryUntilExpired,
+      D.RETRY_UNTIL_EXPIRED
+    );
     this.maxAgeMs = positiveNumber(config.maxAgeMs, D.MAX_AGE_MS);
     this.baseDelayMs = positiveNumber(config.baseDelayMs, D.BASE_DELAY_MS);
     this.maxDelayMs = positiveNumber(config.maxDelayMs, D.MAX_DELAY_MS);

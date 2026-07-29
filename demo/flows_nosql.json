@@ -201,7 +201,7 @@
         "batchSize": 50,
         "maxAttempts": 10,
         "retryUntilExpired": "true",
-        "maxAgeMs": 604800000,
+        "maxAgeMs": 86400000,
         "baseDelayMs": 1000,
         "maxDelayMs": 300000,
         "circuitBreakerEnabled": true,

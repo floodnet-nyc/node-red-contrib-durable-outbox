@@ -219,6 +219,7 @@ test(
             dedupeKey: `expired-${index}`,
             payload: { index },
             maxAttempts: 1,
+            retryUntilExpired: false,
           };
         })
       );

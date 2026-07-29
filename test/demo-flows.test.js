@@ -295,4 +295,24 @@ test("demo outboxes own cleanup and expose enqueue rejection paths", () => {
         [],
         "manual purge controls must not duplicate automatic cleanup"
     );
+
+    const postgresSinks = mainFlow.filter(node =>
+        node.type === "outbox-sink-config" &&
+        node.sinkKey?.startsWith("postgres-")
+    );
+    assert.ok(postgresSinks.length > 0);
+    assert.equal(
+        postgresSinks.every(node =>
+            node.retryUntilExpired === "true" &&
+            node.maxAgeMs === 86_400_000
+        ),
+        true,
+        "PostgreSQL demos should retry infrastructure failures until age expiry"
+    );
+    assert.equal(
+        mainFlow
+            .filter(node => node.type === "durable-outbox-config")
+            .every(node => Number(node.maxJobMb) === 1),
+        true
+    );
 });

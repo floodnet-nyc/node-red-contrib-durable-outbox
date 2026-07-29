@@ -250,6 +250,9 @@ The symbols mean leased, previously failed but still pending, and dead-lettered
 jobs. Pauses, open circuits, expired leases, and storage pressure replace the
 normal state while preserving the `q…` prefix. The emitted payload remains
 structured and includes the exact `display` object passed to Node-RED.
+Other control actions use their existing return values for queue-first
+acknowledgements such as `q263 · paused ⏸`, `q276 · 13 requeued ♻️`, and
+`q263 · integrity ok ✓`; they do not run an additional full status query.
 
 `status` is scoped to the selected sink while including its parent outbox's
 storage health. `purge-delivered`, `maintenance`, and `check-integrity` operate

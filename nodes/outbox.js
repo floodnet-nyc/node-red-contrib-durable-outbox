@@ -108,6 +108,68 @@ module.exports = function registerOutboxNodes(RED) {
     };
   }
 
+  function compactActionDisplay(action, result, queued) {
+    const tokens = [`q${queued}`];
+    let fill = "green";
+    let shape = "dot";
+
+    switch (action) {
+      case "pause":
+        fill = "blue";
+        shape = "ring";
+        tokens.push("paused ⏸");
+        break;
+      case "resume":
+        tokens.push("resumed ▶");
+        if (result.released > 0) tokens.push(`${result.released} released`);
+        break;
+      case "retry-now":
+        fill = "yellow";
+        tokens.push("retry now");
+        tokens.push(`${result.released} released`);
+        break;
+      case "list-dead":
+        fill = result.count > 0 ? "red" : "green";
+        tokens.push(`${result.count} listed ☠️`);
+        break;
+      case "requeue-dead":
+        tokens.push(`${result.requeued} requeued ♻️`);
+        if (result.corruptSkipped > 0) {
+          fill = "yellow";
+          tokens.push(`${result.corruptSkipped} corrupt skipped`);
+        }
+        break;
+      case "requeue-one":
+        tokens.push("1 requeued ♻️");
+        break;
+      case "delete-dead":
+        tokens.push(`${result.deleted} deleted`);
+        break;
+      case "purge-delivered":
+        tokens.push(`${result.purged} purged`);
+        break;
+      case "maintenance":
+        tokens.push(`${result.sweep?.swept || 0} expired`);
+        if (result.checkpoint != null) tokens.push("WAL ✓");
+        if (result.vacuumed) tokens.push("vacuumed");
+        break;
+      case "check-integrity":
+        if (result.ok) {
+          tokens.push("integrity ok ✓");
+        } else {
+          fill = "red";
+          shape = "ring";
+          tokens.push("integrity failed");
+          tokens.push(`${result.errors?.length || 0} errors`);
+        }
+        break;
+      default:
+        tokens.push(action);
+    }
+
+    return { fill, shape, text: tokens.join(" · ") };
+  }
+
   function DurableOutboxConfigNode(config) {
     RED.nodes.createNode(this, config);
     const node = this;
@@ -791,20 +853,25 @@ module.exports = function registerOutboxNodes(RED) {
           default:
             throw new Error(`Unsupported outbox control action: ${action}`);
         }
-        sinkConfig.notifyQueueDepth();
+        const configuredQueueDepth = sinkConfig.notifyQueueDepth();
+        const queueDepth =
+          sink === sinkConfig.sinkKey
+            ? configuredQueueDepth
+            : store.countQueued(sink);
 
         msg.outbox = shell;
-        msg.outbox.result = { action, sink: sink || null, result };
-        msg.payload = result;
-        node.status(
+        const display =
           action === "status"
             ? result.display
-            : {
-                fill: result?.ok === false ? "red" : "green",
-                shape: "dot",
-                text: sink ? `${action} ${sink}` : action,
-              }
-        );
+            : compactActionDisplay(action, result, queueDepth);
+        msg.outbox.result = {
+          action,
+          sink: sink || null,
+          result,
+          display,
+        };
+        msg.payload = result;
+        node.status(display);
         send(msg);
         done();
       } catch (error) {

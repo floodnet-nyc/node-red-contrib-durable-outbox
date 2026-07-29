@@ -184,6 +184,10 @@ test("settle sends non-retryable failures to its dead-letter output", async () =
     },
   });
   assert.equal(control.sent[0].payload.state, "pending");
+  assert.equal(
+    control.sent[0].outbox.result.display.text,
+    "q1 · 1 requeued ♻️"
+  );
   assert.equal(config.store.listDeadLetters().length, 0);
 
   await harness.close(claim);
@@ -240,6 +244,10 @@ test("claim emits a bounded batch and control exposes lifecycle actions", async 
     },
   });
   assert.equal(control.sent[0].payload.purged, 1);
+  assert.equal(
+    control.sent[0].outbox.result.display.text,
+    "q2 · 1 purged"
+  );
 
   await harness.input(control, { outbox: { action: "status" } });
   assert.equal(control.sent[1].outbox.result.sink, "postgres");
@@ -253,8 +261,102 @@ test("claim emits a bounded batch and control exposes lifecycle actions", async 
     },
   });
   assert.equal(control.sent[2].payload.checkpoint, null);
+  assert.equal(
+    control.sent[2].outbox.result.display.text,
+    "q2 · 0 expired"
+  );
 
   await harness.close(claim);
+  await harness.close(config);
+});
+
+test("control actions report contextual q-first results", async () => {
+  const harness = createHarness();
+  const config = harness.instantiate("durable-outbox-config", {
+    id: "outbox",
+    filename: ":memory:",
+  });
+  harness.instantiate("outbox-sink-config", {
+    id: "postgres-sink",
+    outbox: "outbox",
+    sinkKey: "postgres",
+  });
+  const control = harness.instantiate("outbox-control", {
+    sink: "postgres-sink",
+    action: "msg",
+  });
+  const store = config.store;
+  store.enqueue([
+    {
+      sink: "postgres",
+      dedupeKey: "action-status-1",
+      payload: { value: 1 },
+    },
+    {
+      sink: "postgres",
+      dedupeKey: "action-status-2",
+      payload: { value: 2 },
+    },
+  ]);
+
+  const act = async (action, extra = {}) => {
+    await harness.input(control, { outbox: { action, ...extra } });
+    return control.sent.at(-1).outbox.result;
+  };
+
+  let outcome = await act("pause");
+  assert.deepEqual(outcome.display, {
+    fill: "blue",
+    shape: "ring",
+    text: "q2 · paused ⏸",
+  });
+
+  outcome = await act("resume");
+  assert.equal(outcome.display.text, "q2 · resumed ▶ · 2 released");
+
+  outcome = await act("retry-now");
+  assert.equal(outcome.display.text, "q2 · retry now · 2 released");
+  assert.equal(outcome.display.fill, "yellow");
+
+  const [lease] = store.claimBatch({
+    sink: "postgres",
+    maxInFlight: 1,
+    batchSize: 1,
+  });
+  store.settle(lease.id, {
+    leaseToken: lease.leaseToken,
+    success: false,
+    retryable: false,
+    failureClass: "data",
+    error: "invalid",
+  });
+
+  outcome = await act("list-dead");
+  assert.equal(outcome.display.text, "q1 · 1 listed ☠️");
+  assert.equal(outcome.display.fill, "red");
+
+  outcome = await act("requeue-dead");
+  assert.equal(outcome.display.text, "q2 · 1 requeued ♻️");
+
+  const [secondLease] = store.claimBatch({
+    sink: "postgres",
+    maxInFlight: 1,
+    batchSize: 1,
+  });
+  store.settle(secondLease.id, {
+    leaseToken: secondLease.leaseToken,
+    success: false,
+    retryable: false,
+    failureClass: "data",
+    error: "invalid again",
+  });
+  outcome = await act("delete-dead");
+  assert.equal(outcome.display.text, "q1 · 1 deleted");
+
+  outcome = await act("check-integrity");
+  assert.equal(outcome.display.text, "q1 · integrity ok ✓");
+  assert.equal(outcome.display.fill, "green");
+
   await harness.close(config);
 });
 

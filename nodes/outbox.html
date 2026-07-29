@@ -673,6 +673,14 @@
       circuit state; storage health; and the exact <code>display</code> object passed to
       Node-RED's status API.
     </dd>
+    <dd>
+      Other actions also show compact queue-first acknowledgements using only their returned
+      result, such as <code>q263 · paused ⏸</code>,
+      <code>q276 · 13 requeued ♻️</code>, or
+      <code>q263 · integrity ok ✓</code>. Their
+      <code>msg.outbox.result.display</code> contains the same fill, shape, and text shown
+      beneath the node.
+    </dd>
 
     <dt><code>pause</code></dt>
     <dd>

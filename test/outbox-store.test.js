@@ -116,6 +116,127 @@ test("migrates databases created by the original schema", (t) => {
   assert.equal(deadColumns.includes("payload_encoding"), true);
 });
 
+test("removes legacy schema_version columns before dead-lettering jobs", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "durable-outbox-schema-version-"));
+  const filename = join(directory, "outbox.sqlite");
+  const legacy = new DatabaseSync(filename);
+  legacy.exec(`
+    CREATE TABLE outbox_jobs (
+      id TEXT PRIMARY KEY,
+      dedupe_key TEXT NOT NULL UNIQUE,
+      sink TEXT NOT NULL,
+      schema_version INTEGER NOT NULL DEFAULT 1,
+      payload_json TEXT NOT NULL,
+      payload_encoding TEXT NOT NULL DEFAULT 'json-v1',
+      state TEXT NOT NULL DEFAULT 'pending'
+        CHECK (state IN ('pending', 'leased', 'delivered')),
+      attempts INTEGER NOT NULL DEFAULT 0,
+      max_attempts INTEGER NOT NULL DEFAULT 10,
+      retry_until_expired INTEGER NOT NULL DEFAULT 0,
+      max_age_ms INTEGER NOT NULL DEFAULT 86400000,
+      base_delay_ms INTEGER NOT NULL DEFAULT 2000,
+      max_delay_ms INTEGER NOT NULL DEFAULT 300000,
+      available_at INTEGER NOT NULL,
+      lease_until INTEGER,
+      lease_token TEXT,
+      first_error TEXT,
+      last_error TEXT,
+      last_status INTEGER,
+      last_failure_class TEXT,
+      created_at INTEGER NOT NULL,
+      delivered_at INTEGER
+    );
+
+    CREATE TABLE dead_letter_jobs (
+      id TEXT PRIMARY KEY,
+      dedupe_key TEXT NOT NULL,
+      sink TEXT NOT NULL,
+      schema_version INTEGER NOT NULL,
+      payload_json TEXT NOT NULL,
+      payload_encoding TEXT NOT NULL DEFAULT 'json-v1',
+      attempts INTEGER NOT NULL,
+      max_attempts INTEGER NOT NULL,
+      retry_until_expired INTEGER NOT NULL DEFAULT 0,
+      max_age_ms INTEGER NOT NULL,
+      base_delay_ms INTEGER NOT NULL,
+      max_delay_ms INTEGER NOT NULL,
+      first_error TEXT,
+      last_error TEXT,
+      last_status INTEGER,
+      last_failure_class TEXT,
+      created_at INTEGER NOT NULL,
+      failed_at INTEGER NOT NULL
+    );
+  `);
+  legacy.close();
+
+  let now = 1_000;
+  const store = new OutboxStore(filename, {
+    now: () => now,
+    random: () => 0,
+  });
+  t.after(() => {
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  for (const table of ["outbox_jobs", "dead_letter_jobs"]) {
+    assert.equal(
+      store.db
+        .prepare(`PRAGMA table_info("${table}")`)
+        .all()
+        .some((column) => column.name === "schema_version"),
+      false
+    );
+  }
+
+  const jobs = store.enqueue([
+    {
+      sink: "postgres",
+      dedupeKey: "legacy-settle",
+      payload: { value: 1 },
+      maxAttempts: 1,
+      retryUntilExpired: false,
+    },
+    {
+      sink: "postgres",
+      dedupeKey: "legacy-sweep",
+      payload: { value: 2 },
+      maxAttempts: 1,
+      retryUntilExpired: false,
+    },
+  ]);
+  const leases = store.claimBatch({
+    sink: "postgres",
+    maxInFlight: 2,
+    batchSize: 2,
+  });
+
+  const settled = store.settle(jobs[0].id, {
+    leaseToken: leases.find((lease) => lease.id === jobs[0].id).leaseToken,
+    success: false,
+    retryable: false,
+    failureClass: "data",
+    error: "invalid",
+  });
+  assert.equal(settled.state, "dead");
+
+  now += 60_001;
+  assert.equal(store.sweepExhausted({ sink: "postgres" }).swept, 1);
+  assert.deepEqual(
+    store.db
+      .prepare(
+        "SELECT dedupe_key FROM dead_letter_jobs ORDER BY dedupe_key"
+      )
+      .all()
+      .map((row) => row.dedupe_key),
+    [
+      "legacy-settle",
+      "legacy-sweep",
+    ]
+  );
+});
+
 test("serialization preserves Node-RED values and rejects unsafe payloads", (t) => {
   const store = withStore(t);
   const timestamp = new Date("2026-07-26T12:34:56.000Z");

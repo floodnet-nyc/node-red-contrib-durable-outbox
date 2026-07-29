@@ -1217,3 +1217,113 @@ test("integrity checks detect drift and startup reconciles counters and triggers
   assert.equal(store.countQueued("postgres"), 1);
   assert.equal(store.checkIntegrity().ok, true);
 });
+
+test("dead-letter retention purges expired dead letters during cleanup", (t) => {
+  let now = 100_000;
+  const store = withStore(t, {
+    now: () => now,
+    deadLetterRetentionMs: 10_000,
+    cleanupBatchSize: 10,
+  });
+
+  store.enqueue({ sink: "postgres", payload: { value: 1 }, maxAttempts: 1 });
+  const claimed = store.claim({ sink: "postgres" });
+  store.settle(claimed.id, {
+    leaseToken: claimed.leaseToken,
+    success: false,
+    retryable: false,
+    error: "test failure",
+  });
+  assert.equal(store.listDeadLetters().length, 1);
+
+  now += 11_000;
+  const result = store.cleanupDelivered();
+  assert.equal(result.deadPurged, 1);
+  assert.equal(store.listDeadLetters().length, 0);
+  assert.equal(store.cleanupStats.totalDeadPurged, 1);
+});
+
+test("dead-letter retention preserves young dead letters", (t) => {
+  let now = 100_000;
+  const store = withStore(t, {
+    now: () => now,
+    deadLetterRetentionMs: 10_000,
+    cleanupBatchSize: 10,
+  });
+
+  store.enqueue({ sink: "postgres", payload: { value: 1 }, maxAttempts: 1 });
+  const claimed = store.claim({ sink: "postgres" });
+  store.settle(claimed.id, {
+    leaseToken: claimed.leaseToken,
+    success: false,
+    retryable: false,
+    error: "test failure",
+  });
+
+  now += 5_000;
+  const result = store.cleanupDelivered();
+  assert.equal(result.deadPurged, 0);
+  assert.equal(store.listDeadLetters().length, 1);
+  assert.equal(store.cleanupStats.totalDeadPurged, 0);
+});
+
+test("dead-letter retention of zero keeps dead letters forever", (t) => {
+  let now = 100_000;
+  const store = withStore(t, {
+    now: () => now,
+    deadLetterRetentionMs: 0,
+    cleanupBatchSize: 10,
+  });
+
+  store.enqueue({ sink: "postgres", payload: { value: 1 }, maxAttempts: 1 });
+  const claimed = store.claim({ sink: "postgres" });
+  store.settle(claimed.id, {
+    leaseToken: claimed.leaseToken,
+    success: false,
+    retryable: false,
+    error: "test failure",
+  });
+
+  now += 365 * 86_400_000;
+  const result = store.cleanupDelivered();
+  assert.equal(result.deadPurged, 0);
+  assert.equal(store.listDeadLetters().length, 1);
+});
+
+test("dead-letter cleanup runs regardless of storage pressure phase", (t) => {
+  let now = 100_000;
+  const store = withStore(t, {
+    now: () => now,
+    maxDatabaseBytes: 1_048_576,
+    cleanupHighWatermark: 0.01,
+    cleanupLowWatermark: 0,
+    protectIngestion: true,
+    deadLetterRetentionMs: 10_000,
+    cleanupBatchSize: 10,
+    deliveredRetentionMs: 86_400_000,
+  });
+
+  store.enqueue([
+    { sink: "postgres", payload: { value: 1 }, maxAttempts: 1 },
+    { sink: "postgres", dedupeKey: "delivered", payload: { value: 2 } },
+  ]);
+  const claimed = store.claim({ sink: "postgres" });
+  store.settle(claimed.id, {
+    leaseToken: claimed.leaseToken,
+    success: false,
+    retryable: false,
+    error: "dead",
+  });
+  const delivered = store.claim({ sink: "postgres" });
+  store.settle(delivered.id, {
+    leaseToken: delivered.leaseToken,
+    success: true,
+  });
+
+  assert.equal(store.listDeadLetters().length, 1);
+
+  now += 20_000;
+  const result = store.cleanupDelivered({ forcePressure: true });
+  assert.equal(result.deadPurged, 1);
+  assert.equal(store.listDeadLetters().length, 0);
+});

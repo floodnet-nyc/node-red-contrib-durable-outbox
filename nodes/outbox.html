@@ -36,6 +36,13 @@
           return Number.isFinite(Number(value)) && Number(value) >= 0;
         }
       },
+      deadLetterRetentionMs: {
+        value: 2592000000,
+        required: true,
+        validate: function (value) {
+          return Number.isFinite(Number(value)) && Number(value) >= 0;
+        }
+      },
       cleanupIntervalMs: {
         value: 60000,
         required: true,
@@ -280,11 +287,15 @@
     <input type="number" id="node-config-input-minFreeDiskMb" min="0" step="any">
   </div>
   <div class="form-row">
-    <h4><i class="fa fa-history"></i> Delivered history</h4>
+    <h4><i class="fa fa-history"></i> Retention & cleanup</h4>
   </div>
   <div class="form-row">
-    <label for="node-config-input-deliveredRetentionMs">Retention (ms)</label>
+    <label for="node-config-input-deliveredRetentionMs">Delivered retention (ms)</label>
     <input type="number" id="node-config-input-deliveredRetentionMs" min="0">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-deadLetterRetentionMs">Dead-letter retention (ms)</label>
+    <input type="number" id="node-config-input-deadLetterRetentionMs" min="0">
   </div>
   <div class="form-row">
     <label for="node-config-input-cleanupIntervalMs">Cleanup interval (ms)</label>
@@ -500,7 +511,7 @@
     removed after the configured retention period. When logical database use reaches the
     cleanup-start watermark, the oldest delivered records may be removed early until use
     reaches the cleanup target. Pending, leased, and dead-letter jobs are never removed by
-    delivered-history cleanup.
+    delivered-history cleanup (dead letters have their own retention policy).
   </p>
 </script>
 

@@ -211,6 +211,10 @@ module.exports = function registerOutboxNodes(RED) {
         config.deliveredRetentionMs,
         D.DELIVERED_RETENTION_MS
       ),
+      deadLetterRetentionMs: nonnegativeNumber(
+        config.deadLetterRetentionMs,
+        D.DEAD_LETTER_RETENTION_MS
+      ),
       cleanupBatchSize: config.cleanupBatchSize,
       cleanupHighWatermark: cleanupHighWatermarkPercent / 100,
       cleanupLowWatermark: cleanupLowWatermarkPercent / 100,
